@@ -9,16 +9,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-func PrintRankedTorrent(t server.RankedTorrent) {
-	peers, _ := t.AnnounceCount.Value()
-	infoHash, _ := t.InfoHash.Value()
-	name, _ := t.Name.Value()
-	if name == nil {
-		name = "UNRESOLVED"
-	}
-	fmt.Printf("%-9d %-80s magnet:?xt=urn:btih:%-40s\n", peers, name, infoHash)
-}
-
 func CmdSearch(c *cli.Context) error {
 	if !c.Bool("verbose") {
 		log.SetOutput(ioutil.Discard)

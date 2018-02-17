@@ -25,11 +25,12 @@ import (
 const ResolveWindow = time.Second * 600
 
 type Server struct {
-	Client       *torrent.Client
-	hashes       []string
-	db           *SqliteDBClient
-	hashLock     sync.Mutex
-	resolveCache *cache2go.CacheTable
+	Client         *torrent.Client
+	hashes         []string
+	db             *SqliteDBClient
+	hashLock       sync.Mutex
+	resolveCache   *cache2go.CacheTable
+	listenAnnounce bool
 }
 
 type TorrentResolver interface {
@@ -88,7 +89,7 @@ func (s *Server) OnAnnouncePeer(h metainfo.Hash, peer dht.Peer) {
 	}
 }
 
-func (s *Server) WaitForSig() {
+func (s *Server) Listen() {
 	sigs := make(chan os.Signal, 1)
 	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -97,9 +98,9 @@ func (s *Server) WaitForSig() {
 			if len(s.hashes) > 0 {
 				hx := s.hashes[0]
 				s.hashes = s.hashes[1:]
-				h := metainfo.NewHashFromHex(hx)
-				st, err := s.db.GetTorrent(h)
+				st, err := s.db.GetTorrent(hx)
 				if err == sql.ErrNoRows || st.ResolvedAt == nil {
+					h := metainfo.NewHashFromHex(hx)
 					t, new := s.Client.AddTorrentInfoHash(h)
 					if new {
 						select {
@@ -116,7 +117,10 @@ func (s *Server) WaitForSig() {
 				} else if err != nil {
 					log.Printf("GetTorrent err:\t%s", err)
 				} else {
-					log.Printf("Found:\t%s\t%s", st.InfoHash.HexString(), st.Name)
+					log.Printf("Found:\t%s\t%s", st.InfoHash, st.Name)
+				}
+				if s.listenAnnounce == false {
+					done <- true
 				}
 
 			} else {
@@ -130,25 +134,37 @@ func (s *Server) WaitForSig() {
 	}()
 	<-done
 	s.db.Close()
-	log.Printf("Exiting Detergent, here are some stats:")
-	s.Client.WriteStatus(os.Stderr)
+	if s.listenAnnounce {
+		log.Printf("Exiting Detergent, here are some stats:")
+		s.Client.WriteStatus(os.Stderr)
+	}
 }
 
-func NewServer() *Server {
+func NewServer(listenAnnounce bool) *Server {
+	var dhtCfg dht.ServerConfig
 	stor := NewSqliteDB("./")
 	s := &Server{
-		Client:       nil,
-		hashes:       make([]string, 0),
-		db:           stor.(*SqliteDBClient),
-		resolveCache: cache2go.Cache("resolveCache"),
+		Client:         nil,
+		hashes:         make([]string, 0),
+		db:             stor.(*SqliteDBClient),
+		resolveCache:   cache2go.Cache("resolveCache"),
+		listenAnnounce: listenAnnounce,
 	}
-	cfg := torrent.Config{
-		DefaultStorage: stor,
-		DHTConfig: dht.ServerConfig{
+	if listenAnnounce {
+		dhtCfg = dht.ServerConfig{
 			StartingNodes: dht.GlobalBootstrapAddrs,
 			//OnQuery:       s.OnQuery,
 			OnAnnouncePeer: s.OnAnnouncePeer,
-		},
+		}
+	} else {
+		dhtCfg = dht.ServerConfig{
+			StartingNodes:  dht.GlobalBootstrapAddrs,
+			OnAnnouncePeer: func(h metainfo.Hash, p dht.Peer) {},
+		}
+	}
+	cfg := torrent.Config{
+		DefaultStorage: stor,
+		DHTConfig:      dhtCfg,
 	}
 	cl, err := torrent.NewClient(&cfg)
 	id := cl.PeerID()
@@ -168,7 +184,9 @@ func NewServer() *Server {
 		http.HandleFunc("/dht", func(w http.ResponseWriter, r *http.Request) {
 			cl.DHT().WriteStatus(w)
 		})
-		log.Println("Web stats listening on: http://0.0.0.0:8888")
+		if listenAnnounce {
+			log.Println("Web stats listening on: http://0.0.0.0:8888")
+		}
 		log.Fatal(http.ListenAndServe(":8888", nil))
 	}()
 	return s

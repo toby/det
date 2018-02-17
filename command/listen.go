@@ -6,7 +6,7 @@ import (
 )
 
 func CmdListen(c *cli.Context) error {
-	s := server.NewServer()
-	s.WaitForSig()
+	s := server.NewServer(true)
+	s.Listen()
 	return nil
 }

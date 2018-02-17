@@ -5,7 +5,7 @@ Distributed torrents.
 ## Install
 
 ```bash
-$ go get -d git.playgrub.com/toby/det.git
+$ go get git.playgrub.com/toby/det.git
 ```
 
 ## Usage
@@ -19,6 +19,7 @@ det [global options] command [command options] [arguments...]
 COMMANDS:
      listen, l   Build torrent database from network
      search, s   Search resolved torrents
+     resolve, r  Resolve a magnet hash
      popular, p  List popular torrents
      info, i     Show Detergent info
      help, h     Shows a list of commands or help for one command

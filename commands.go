@@ -36,6 +36,22 @@ var Commands = []cli.Command{
 		},
 	},
 	{
+		Name:    "resolve",
+		Usage:   "Resolve a magnet hash",
+		Aliases: []string{"r"},
+		Action:  command.CmdResolve,
+		Flags: []cli.Flag{
+			cli.BoolFlag{
+				Name:  "verbose, v",
+				Usage: "Verbose output",
+			},
+			cli.BoolFlag{
+				Name:  "ping, p",
+				Usage: "Ping nodes",
+			},
+		},
+	},
+	{
 		Name:    "popular",
 		Usage:   "List popular torrents",
 		Aliases: []string{"p"},

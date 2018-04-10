@@ -68,7 +68,9 @@ func (s *Server) OnQuery(query *krpc.Msg, source net.Addr) (propagate bool) {
 	s.hashLock.Lock()
 	defer s.hashLock.Unlock()
 	if query.Q == "get_peers" {
-		s.AddHash(hex.EncodeToString(query.A.InfoHash[:]))
+		if err := s.AddHash(hex.EncodeToString(query.A.InfoHash[:])); err != nil {
+			log.Printf("Error adding hash: %s", err)
+		}
 	}
 	return true
 }
@@ -77,12 +79,13 @@ func (s *Server) OnAnnouncePeer(h metainfo.Hash, peer dht.Peer) {
 	s.hashLock.Lock()
 	defer s.hashLock.Unlock()
 	hx := h.HexString()
-	err := s.AddHash(hx)
-	if err == nil {
-		err := s.db.CreateAnnounce(hx, peer.String())
-		if err != nil {
-			log.Printf("CreateAnnounce Error:\t%s", err)
-		}
+
+	if err := s.AddHash(hx); err != nil {
+		log.Printf("Error adding hash: %s", err)
+	}
+
+	if err := s.db.CreateAnnounce(hx, peer.String()); err != nil {
+		log.Printf("CreateAnnounce Error:\t%s", err)
 	}
 }
 

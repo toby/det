@@ -5,7 +5,7 @@ Distributed torrents.
 ## Install
 
 ```bash
-$ go get git.playgrub.com/toby/det.git
+$ go get git.playgrub.com/toby/det
 ```
 
 ## Usage

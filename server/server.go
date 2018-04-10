@@ -38,33 +38,30 @@ type TorrentResolver interface {
 }
 
 func (s *Server) AddHash(h string) error {
-	if len(h) == 40 {
-		err := s.db.CreateTorrent(h)
-		if err != nil {
-			// duplicate hash
-			if err.(sqlite3.Error).Code == 19 {
-				// have we tried to resolve this in the last 10 mins?
-				_, err := s.resolveCache.Value(h)
-				if err == nil {
-					// yes, do nothing
-					return nil
-				} else {
-					// no, try to resolve
-					s.resolveCache.Add(h, ResolveWindow, true)
-					s.hashes = append(s.hashes, h)
-					return nil
-				}
+	if len(h) != 40 {
+		return errors.New("Invalid hash length")
+	}
 
-			}
+	err := s.db.CreateTorrent(h)
+	if err != nil {
+		// duplicate hash
+		if err.(sqlite3.Error).Code != 19 {
 			log.Printf("AddHash Error:\t%s", err)
 			return err
-		} else {
+		}
+
+		// have we tried to resolve this in the last 10 mins?
+		if _, err = s.resolveCache.Value(h); err != nil {
+			// no, try to resolve
 			s.resolveCache.Add(h, ResolveWindow, true)
 			s.hashes = append(s.hashes, h)
-			return nil
 		}
+	} else {
+		s.resolveCache.Add(h, ResolveWindow, true)
+		s.hashes = append(s.hashes, h)
 	}
-	return errors.New("Invalid hash length")
+
+	return nil
 }
 
 func (s *Server) OnQuery(query *krpc.Msg, source net.Addr) (propagate bool) {

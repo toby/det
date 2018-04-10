@@ -82,6 +82,7 @@ func (s *Server) OnAnnouncePeer(h metainfo.Hash, peer dht.Peer) {
 
 	if err := s.AddHash(hx); err != nil {
 		log.Printf("Error adding hash: %s", err)
+		return
 	}
 
 	if err := s.db.CreateAnnounce(hx, peer.String()); err != nil {

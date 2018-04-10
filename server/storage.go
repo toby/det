@@ -108,9 +108,9 @@ func (me *SqliteDBClient) GetTorrent(hash string) (ret Torrent, err error) {
 	err = row.Scan(&h, &ret.Name, &ret.CreatedAt, &ret.ResolvedAt)
 	if err != nil {
 		return Torrent{0, "", "", nil, nil}, err
-	} else {
-		ret.InfoHash = h
 	}
+
+	ret.InfoHash = h
 	return
 }
 

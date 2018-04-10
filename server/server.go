@@ -119,7 +119,7 @@ func (s *Server) Listen() {
 				} else {
 					log.Printf("Found:\t%s\t%s", st.InfoHash, st.Name)
 				}
-				if s.listenAnnounce == false {
+				if !s.listenAnnounce {
 					done <- true
 				}
 

@@ -65,7 +65,7 @@ func (s *Server) AddHash(h string) error {
 	return nil
 }
 
-func (s *Server) OnQuery(query *krpc.Msg, source net.Addr) (propagate bool) {
+func (s *Server) OnQuery(query *krpc.Msg, source net.Addr) bool {
 	s.hashLock.Lock()
 	defer s.hashLock.Unlock()
 	if query.Q == "get_peers" {

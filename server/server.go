@@ -52,16 +52,13 @@ func (s *Server) AddHash(h string) error {
 		}
 
 		// have we tried to resolve this in the last 10 mins?
-		if _, err = s.resolveCache.Value(h); err != nil {
-			// no, try to resolve
-			s.resolveCache.Add(h, ResolveWindow, true)
-			s.hashes = append(s.hashes, h)
+		if _, err = s.resolveCache.Value(h); err == nil {
+			return nil
 		}
-	} else {
-		s.resolveCache.Add(h, ResolveWindow, true)
-		s.hashes = append(s.hashes, h)
 	}
 
+	s.resolveCache.Add(h, ResolveWindow, true)
+	s.hashes = append(s.hashes, h)
 	return nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -90,6 +91,29 @@ func (s *Server) OnAnnouncePeer(h metainfo.Hash, peer dht.Peer) {
 	}
 }
 
+func (s *Server) resolveHash(hx string) error {
+	st, err := s.db.GetTorrent(hx)
+	if err == sql.ErrNoRows || st.ResolvedAt == nil {
+		h := metainfo.NewHashFromHex(hx)
+		t, new := s.Client.AddTorrentInfoHash(h)
+		if new {
+			select {
+			case <-t.GotInfo():
+			case <-time.After(time.Second * 2):
+				log.Printf("Timeout:\t%s", h)
+			}
+		} else {
+			log.Printf("Resolved Found:\t%s", t)
+		}
+		t.Drop()
+	} else if err != nil {
+		return fmt.Errorf("GetTorrent err:\t%s", err)
+	}
+
+	log.Printf("Found:\t%s\t%s", st.InfoHash, st.Name)
+	return nil
+}
+
 func (s *Server) Listen() {
 	sigs := make(chan os.Signal, 1)
 	done := make(chan bool, 1)
@@ -97,33 +121,14 @@ func (s *Server) Listen() {
 	go func() {
 		for {
 			if len(s.hashes) > 0 {
-				hx := s.hashes[0]
-				s.hashes = s.hashes[1:]
-				st, err := s.db.GetTorrent(hx)
-				if err == sql.ErrNoRows || st.ResolvedAt == nil {
-					h := metainfo.NewHashFromHex(hx)
-					t, new := s.Client.AddTorrentInfoHash(h)
-					if new {
-						select {
-						case <-t.GotInfo():
-						case <-time.After(time.Second * 2):
-							log.Printf("Timeout:\t%s", h)
-						case <-sigs:
-							done <- true
-						}
-					} else {
-						log.Printf("Resolved Found:\t%s", t)
-					}
-					t.Drop()
-				} else if err != nil {
-					log.Printf("GetTorrent err:\t%s", err)
-				} else {
-					log.Printf("Found:\t%s\t%s", st.InfoHash, st.Name)
+				err := s.resolveHash(s.hashes[0])
+				if err != nil {
+					log.Println(err)
 				}
+				s.hashes = s.hashes[1:]
 				if !s.listenAnnounce {
 					done <- true
 				}
-
 			} else {
 				select {
 				case <-time.After(time.Second):

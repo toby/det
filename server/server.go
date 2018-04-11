@@ -23,7 +23,7 @@ import (
 	"github.com/muesli/cache2go"
 )
 
-const ResolveWindow = time.Second * 600
+const ResolveWindow = time.Minute * 10
 
 type Server struct {
 	Client         *torrent.Client

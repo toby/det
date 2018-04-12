@@ -105,9 +105,10 @@ func (s *Server) resolveHash(hx string) error {
 		t.Drop()
 	} else if err != nil {
 		return fmt.Errorf("GetTorrent err:\t%s", err)
+	} else {
+		log.Printf("Found:\t%s\t%s", st.InfoHash, st.Name)
 	}
 
-	log.Printf("Found:\t%s\t%s", st.InfoHash, st.Name)
 	return nil
 }
 

@@ -102,12 +102,12 @@ func (me *SqliteDBClient) GetTorrent(hash string) (ret Torrent, err error) {
 	ret = Torrent{}
 	row, err := dot.QueryRow(me.db, "get-torrent", hash)
 	if err != nil {
-		return Torrent{0, "", "", nil, nil}, err
+		return Torrent{}, err
 	}
 	var h string
 	err = row.Scan(&h, &ret.Name, &ret.CreatedAt, &ret.ResolvedAt)
 	if err != nil {
-		return Torrent{0, "", "", nil, nil}, err
+		return Torrent{}, err
 	}
 
 	ret.InfoHash = h

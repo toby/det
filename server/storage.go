@@ -117,10 +117,11 @@ func (me *SqliteDBClient) GetTorrent(hash string) (ret Torrent, err error) {
 func (me *SqliteDBClient) PopularTorrents(limit int) (ret []Torrent, err error) {
 	ret = make([]Torrent, 0)
 	rows, err := dot.Query(me.db, "popular-torrents", limit)
-	defer rows.Close()
 	if err != nil {
 		return ret, err
 	}
+	defer rows.Close()
+
 	for rows.Next() {
 		var row Torrent
 		err = rows.Scan(&row.AnnounceCount, &row.InfoHash, &row.Name, &row.CreatedAt, &row.ResolvedAt)
@@ -132,10 +133,11 @@ func (me *SqliteDBClient) PopularTorrents(limit int) (ret []Torrent, err error) 
 func (me *SqliteDBClient) SearchTorrents(term string, limit int) (ret []Torrent, err error) {
 	ret = make([]Torrent, 0)
 	rows, err := dot.Query(me.db, "search-torrents", term, limit)
-	defer rows.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
+
 	for rows.Next() {
 		var row Torrent
 		err = rows.Scan(&row.AnnounceCount, &row.InfoHash, &row.Name, &row.CreatedAt, &row.ResolvedAt)

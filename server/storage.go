@@ -21,14 +21,45 @@ type Torrent struct {
 	AnnounceCount int
 	Name          string
 	InfoHash      string
-	CreatedAt     *time.Time
-	ResolvedAt    *time.Time
+	CreatedAt     time.Time
+	ResolvedAt    time.Time
 }
 
 type Stats struct {
 	Torrents  int64
 	Announces int64
 	Resolved  int64
+}
+
+func scanTorrent(scan func(...interface{}) error) (Torrent, error) {
+	st := struct {
+		AnnounceCount int
+		Name          *string
+		InfoHash      string
+		CreatedAt     *time.Time
+		ResolvedAt    *time.Time
+	}{}
+
+	err := scan(&st.AnnounceCount, &st.InfoHash, &st.Name, &st.CreatedAt, &st.ResolvedAt)
+	if err != nil {
+		return Torrent{}, err
+	}
+
+	t := Torrent{
+		AnnounceCount: st.AnnounceCount,
+		InfoHash:      st.InfoHash,
+	}
+	if st.Name != nil {
+		t.Name = *st.Name
+	}
+	if st.CreatedAt != nil {
+		t.CreatedAt = *st.CreatedAt
+	}
+	if st.ResolvedAt != nil {
+		t.ResolvedAt = *st.ResolvedAt
+	}
+
+	return t, nil
 }
 
 func NewSqliteDB(filePath string) storage.ClientImpl {
@@ -98,24 +129,22 @@ func (me *SqliteDBClient) CreateTorrent(hash string) error {
 	return err
 }
 
-func (me *SqliteDBClient) GetTorrent(hash string) (ret Torrent, err error) {
-	ret = Torrent{}
+func (me *SqliteDBClient) GetTorrent(hash string) (Torrent, error) {
 	row, err := dot.QueryRow(me.db, "get-torrent", hash)
 	if err != nil {
 		return Torrent{}, err
 	}
-	var h string
-	err = row.Scan(&h, &ret.Name, &ret.CreatedAt, &ret.ResolvedAt)
+
+	t, err := scanTorrent(row.Scan)
 	if err != nil {
 		return Torrent{}, err
 	}
 
-	ret.InfoHash = h
-	return
+	return t, nil
 }
 
-func (me *SqliteDBClient) PopularTorrents(limit int) (ret []Torrent, err error) {
-	ret = make([]Torrent, 0)
+func (me *SqliteDBClient) PopularTorrents(limit int) ([]Torrent, error) {
+	ret := make([]Torrent, 0)
 	rows, err := dot.Query(me.db, "popular-torrents", limit)
 	if err != nil {
 		return ret, err
@@ -123,15 +152,18 @@ func (me *SqliteDBClient) PopularTorrents(limit int) (ret []Torrent, err error) 
 	defer rows.Close()
 
 	for rows.Next() {
-		var row Torrent
-		err = rows.Scan(&row.AnnounceCount, &row.InfoHash, &row.Name, &row.CreatedAt, &row.ResolvedAt)
-		ret = append(ret, row)
+		t, err := scanTorrent(rows.Scan)
+		if err != nil {
+			return ret, err
+		}
+		ret = append(ret, t)
 	}
-	return
+
+	return ret, nil
 }
 
-func (me *SqliteDBClient) SearchTorrents(term string, limit int) (ret []Torrent, err error) {
-	ret = make([]Torrent, 0)
+func (me *SqliteDBClient) SearchTorrents(term string, limit int) ([]Torrent, error) {
+	ret := make([]Torrent, 0)
 	rows, err := dot.Query(me.db, "search-torrents", term, limit)
 	if err != nil {
 		return nil, err
@@ -139,11 +171,14 @@ func (me *SqliteDBClient) SearchTorrents(term string, limit int) (ret []Torrent,
 	defer rows.Close()
 
 	for rows.Next() {
-		var row Torrent
-		err = rows.Scan(&row.AnnounceCount, &row.InfoHash, &row.Name, &row.CreatedAt, &row.ResolvedAt)
-		ret = append(ret, row)
+		t, err := scanTorrent(rows.Scan)
+		if err != nil {
+			return ret, err
+		}
+		ret = append(ret, t)
 	}
-	return
+
+	return ret, nil
 }
 
 func (me *SqliteDBClient) CreateAnnounce(hash string, peerId string) error {

@@ -90,7 +90,7 @@ func (s *Server) OnAnnouncePeer(h metainfo.Hash, peer dht.Peer) {
 
 func (s *Server) resolveHash(hx string) error {
 	st, err := s.db.GetTorrent(hx)
-	if err == sql.ErrNoRows || st.ResolvedAt == nil {
+	if err == sql.ErrNoRows || st.ResolvedAt.IsZero() {
 		h := metainfo.NewHashFromHex(hx)
 		t, new := s.Client.AddTorrentInfoHash(h)
 		if new {

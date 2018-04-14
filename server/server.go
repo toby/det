@@ -52,7 +52,7 @@ func (s *Server) AddHash(h string) error {
 		}
 
 		// have we tried to resolve this in the last 10 mins?
-		if _, err = s.resolveCache.Value(h); err == nil {
+		if s.resolveCache.Exists(h) {
 			return nil
 		}
 	}

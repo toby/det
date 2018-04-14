@@ -118,6 +118,11 @@ func (s *Server) Listen() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		for {
+			select {
+			case <-sigs:
+				done <- true
+			}
+
 			if len(s.hashes) > 0 {
 				err := s.resolveHash(s.hashes[0])
 				if err != nil {

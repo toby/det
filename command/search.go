@@ -2,7 +2,6 @@ package command
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 
 	"git.playgrub.com/toby/det/server"
@@ -10,10 +9,6 @@ import (
 )
 
 func CmdSearch(c *cli.Context) error {
-	if !c.Bool("verbose") {
-		log.SetOutput(ioutil.Discard)
-	}
-
 	var db *server.SqliteDBClient
 	db = server.NewSqliteDB("./").(*server.SqliteDBClient)
 	defer db.Close()

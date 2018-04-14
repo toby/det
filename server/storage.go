@@ -2,6 +2,7 @@ package server
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"path/filepath"
 	"time"
@@ -29,6 +30,11 @@ type Stats struct {
 	Torrents  int64
 	Announces int64
 	Resolved  int64
+}
+
+type TimelineEntry struct {
+	Day      time.Time
+	Torrents []Torrent
 }
 
 func scanTorrent(scan func(...interface{}) error) (Torrent, error) {
@@ -157,6 +163,32 @@ func (me *SqliteDBClient) PopularTorrents(limit int) ([]Torrent, error) {
 			return ret, err
 		}
 		ret = append(ret, t)
+	}
+
+	return ret, nil
+}
+
+func (me *SqliteDBClient) TimelineTorrents(days int, limit int) ([]TimelineEntry, error) {
+	ret := make([]TimelineEntry, 0)
+	d := time.Now()
+	df := "-%d days"
+	for i := 0; i <= days; i++ {
+		ts := make([]Torrent, 0)
+		rows, err := dot.Query(me.db, "popular-torrents-day", fmt.Sprintf(df, i), fmt.Sprintf(df, i+1), limit)
+		if err != nil {
+			return ret, err
+		}
+
+		for rows.Next() {
+			t, err := scanTorrent(rows.Scan)
+			if err != nil {
+				return ret, err
+			}
+			ts = append(ts, t)
+		}
+		rows.Close()
+		ret = append(ret, TimelineEntry{d, ts})
+		d = d.Add(time.Hour * -24)
 	}
 
 	return ret, nil

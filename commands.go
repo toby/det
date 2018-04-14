@@ -29,10 +29,6 @@ var Commands = []cli.Command{
 				Value: 25,
 				Usage: "Number of popular torrents to show",
 			},
-			cli.BoolFlag{
-				Name:  "verbose, v",
-				Usage: "Verbose output",
-			},
 		},
 	},
 	{
@@ -42,10 +38,6 @@ var Commands = []cli.Command{
 		Action:  command.CmdResolve,
 		Flags: []cli.Flag{
 			cli.BoolFlag{
-				Name:  "verbose, v",
-				Usage: "Verbose output",
-			},
-			cli.BoolFlag{
 				Name:  "ping, p",
 				Usage: "Ping nodes",
 			},
@@ -53,7 +45,7 @@ var Commands = []cli.Command{
 	},
 	{
 		Name:    "popular",
-		Usage:   "List popular torrents",
+		Usage:   "List top torrents of all time",
 		Aliases: []string{"p"},
 		Action:  command.CmdPopular,
 		Flags: []cli.Flag{
@@ -61,6 +53,24 @@ var Commands = []cli.Command{
 				Name:  "limit",
 				Value: 25,
 				Usage: "Number of popular torrents to show",
+			},
+		},
+	},
+	{
+		Name:    "timeline",
+		Usage:   "List most popular torrents found each day",
+		Aliases: []string{"t"},
+		Action:  command.CmdTimeline,
+		Flags: []cli.Flag{
+			cli.IntFlag{
+				Name:  "days",
+				Value: 10,
+				Usage: "Number of days to show",
+			},
+			cli.IntFlag{
+				Name:  "limit",
+				Value: 10,
+				Usage: "Number torrents per day to show",
 			},
 		},
 	},

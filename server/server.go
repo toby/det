@@ -121,6 +121,7 @@ func (s *Server) Listen() {
 			select {
 			case <-sigs:
 				done <- true
+			default:
 			}
 
 			if len(s.hashes) > 0 {

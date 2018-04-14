@@ -69,6 +69,13 @@ SELECT announce_count, infoHash, name, created_at, resolved_at
 FROM torrent
 ORDER BY announce_count DESC LIMIT ?;
 
+-- name: popular-torrents-day
+SELECT announce_count, infoHash, name, created_at, resolved_at
+FROM torrent
+WHERE datetime(created_at, 'unixepoch') <= datetime('now', '-? days')
+AND datetime(created_at, 'unixepoch') > datetime('now', '-? days')
+ORDER BY announce_count DESC LIMIT ?;
+
 -- name: total-torrents
 SELECT count(*) FROM torrent
 

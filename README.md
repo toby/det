@@ -4,8 +4,25 @@ Distributed torrents.
 
 ## Install
 
+The `anacrolix/torrent` and `anacrolix/dht` libs have recently changed
+interface and break compatibility with `det`. Please use the following
+installation procedure as a temporary fix.
+
 ```bash
-$ go get git.playgrub.com/toby/det
+go get git.playgrub.com/toby/det
+
+cd $GOPATH/src/github.com/anacrolix/dht
+git remote add det https://git.playgrub.com/toby/dht.git
+git fetch det
+git checkout det
+
+cd $GOPATH/src/github.com/anacrolix/torrent
+git remote add det https://git.playgrub.com/toby/torrent.git
+git fetch det
+git checkout det
+
+cd $GOPATH/src/git.playgrub.com/toby/det
+go clean; go build
 ```
 
 ## Usage

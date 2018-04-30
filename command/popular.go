@@ -9,7 +9,7 @@ import (
 
 func CmdPopular(c *cli.Context) error {
 	var db *server.SqliteDBClient
-	db = server.NewSqliteDB("./").(*server.SqliteDBClient)
+	db = server.NewSqliteDB("./")
 	defer db.Close()
 	limit := c.Int("limit")
 	ts, err := db.PopularTorrents(limit)

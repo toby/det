@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/anacrolix/torrent/storage"
 	"github.com/gchaincl/dotsql"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -68,19 +67,11 @@ func scanTorrent(scan func(...interface{}) error) (Torrent, error) {
 	return t, nil
 }
 
-func NewSqliteDB(filePath string) storage.ClientImpl {
+func NewSqliteDB(filePath string) *SqliteDBClient {
 	log.Printf("Using SQLite DB: %ssqlite.db", filePath)
 	ret := &SqliteDBClient{}
 	var err error
 	ret.db, err = sql.Open("sqlite3", filepath.Join(filePath, "sqlite.db"))
-	if err != nil {
-		panic(err)
-	}
-	_, err = dot.Exec(ret.db, "create-completed-table")
-	if err != nil {
-		ret.db.Close()
-		panic(err)
-	}
 	_, err = dot.Exec(ret.db, "create-torrent-table")
 	if err != nil {
 		ret.db.Close()
@@ -219,5 +210,15 @@ func (me *SqliteDBClient) CreateAnnounce(hash string, peerId string) error {
 		return err
 	}
 	_, err = dot.Exec(me.db, "update-announce-count", hash)
+	return err
+}
+
+func (me *SqliteDBClient) SetTorrentMeta(hash string, name string) error {
+	_, err := dot.Exec(me.db, "set-torrent-meta", name, hash)
+	return err
+}
+
+func (me *SqliteDBClient) CreateTorrentSearch(hash string, name string) error {
+	_, err := dot.Exec(me.db, "create-torrent-search", hash, name)
 	return err
 }

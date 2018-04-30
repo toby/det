@@ -2,3 +2,4 @@ detergent
 det
 *.test
 sqlite.db
+.torrent.bolt.db

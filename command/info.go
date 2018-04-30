@@ -10,7 +10,7 @@ import (
 
 func CmdInfo(c *cli.Context) error {
 	var db *server.SqliteDBClient
-	db = server.NewSqliteDB("./").(*server.SqliteDBClient)
+	db = server.NewSqliteDB("./")
 	defer db.Close()
 	stats, err := db.Stats()
 	if err != nil {

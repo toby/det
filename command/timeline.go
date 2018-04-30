@@ -10,7 +10,7 @@ import (
 
 func CmdTimeline(c *cli.Context) error {
 	var db *server.SqliteDBClient
-	db = server.NewSqliteDB("./").(*server.SqliteDBClient)
+	db = server.NewSqliteDB("./")
 	defer db.Close()
 	days := c.Int("days")
 	limit := c.Int("limit")

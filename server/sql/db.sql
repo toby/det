@@ -1,10 +1,3 @@
--- name: create-completed-table
-CREATE TABLE IF NOT EXISTS completed(
-  infoHash,
-  "index",
-  unique(infoHash, "index") ON CONFLICT IGNORE
-);
-
 -- name: create-torrent-table
 CREATE TABLE IF NOT EXISTS torrent(
   infoHash TEXT UNIQUE,
@@ -52,17 +45,6 @@ FROM search_torrent AS s
 INNER JOIN torrent AS t ON s.infoHash = t.infoHash
 WHERE s.name MATCH ?
 ORDER BY t.announce_count DESC LIMIT ?
-
--- name: completed-exists
-SELECT EXISTS(
-  SELECT * FROM completed WHERE infoHash = ? AND "index" = ?
-);
-
--- name: insert-completed
-INSERT INTO completed (infoHash, "index") VALUES (?, ?)
-
--- name: delete-completed
-DELETE FROM completed WHERE infoHash = ? AND "index" = ?
 
 -- name: popular-torrents
 SELECT announce_count, infoHash, name, created_at, resolved_at

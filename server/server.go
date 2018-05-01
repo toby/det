@@ -177,6 +177,7 @@ func NewServer(listenAnnounce bool) *Server {
 	}
 	cfg := torrent.Config{
 		DHTConfig: dhtCfg,
+		Seed:      true,
 	}
 	cl, err := torrent.NewClient(&cfg)
 	id := cl.PeerID()

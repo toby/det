@@ -75,6 +75,19 @@ var Commands = []cli.Command{
 		},
 	},
 	{
+		Name:    "download",
+		Usage:   "Download magnet URL",
+		Aliases: []string{"d"},
+		Action:  command.CmdDownload,
+		Flags:   []cli.Flag{},
+	},
+	{
+		Name:   "seed",
+		Usage:  "Seed file on torrent network",
+		Action: command.CmdSeed,
+		Flags:  []cli.Flag{},
+	},
+	{
 		Name:    "info",
 		Usage:   "Show Detergent info",
 		Aliases: []string{"i"},

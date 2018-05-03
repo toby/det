@@ -41,8 +41,8 @@ func CmdSeed(c *cli.Context) error {
 			panic(err)
 		}
 		cfg := server.ServerConfig{
-			StoreAnnounces: false,
-			Seed:           true,
+			Listen: false,
+			Seed:   true,
 		}
 		s := server.NewServer(&cfg)
 		defer s.Client.Close()

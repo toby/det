@@ -26,17 +26,17 @@ import (
 const ResolveWindow = time.Minute * 10
 
 type Server struct {
-	Client         *torrent.Client
-	hashes         []string
-	db             *SqliteDBClient
-	hashLock       sync.Mutex
-	resolveCache   *cache2go.CacheTable
-	listenAnnounce bool
+	Client       *torrent.Client
+	hashes       []string
+	db           *SqliteDBClient
+	hashLock     sync.Mutex
+	resolveCache *cache2go.CacheTable
+	listen       bool
 }
 
 type ServerConfig struct {
-	StoreAnnounces bool
-	Seed           bool
+	Listen bool
+	Seed   bool
 }
 
 type TorrentResolver interface {
@@ -138,7 +138,7 @@ func (s *Server) Listen() {
 					log.Println(err)
 				}
 				s.hashes = s.hashes[1:]
-				if !s.listenAnnounce {
+				if !s.listen {
 					done <- true
 				}
 			} else {
@@ -152,29 +152,27 @@ func (s *Server) Listen() {
 	}()
 	<-done
 	s.db.Close()
-	if s.listenAnnounce {
-		log.Printf("Exiting Detergent, here are some stats:")
-		s.Client.WriteStatus(os.Stderr)
-	}
+	log.Printf("Exiting Detergent, here are some stats:")
+	s.Client.WriteStatus(os.Stderr)
 }
 
 func NewServer(cfg *ServerConfig) *Server {
 	var dhtCfg dht.ServerConfig
 	if cfg == nil {
 		cfg = &ServerConfig{
-			StoreAnnounces: true,
-			Seed:           false,
+			Listen: true,
+			Seed:   false,
 		}
 	}
 	db := NewSqliteDB("./")
 	s := &Server{
-		Client:         nil,
-		hashes:         make([]string, 0),
-		resolveCache:   cache2go.Cache("resolveCache"),
-		listenAnnounce: cfg.StoreAnnounces,
-		db:             db,
+		Client:       nil,
+		hashes:       make([]string, 0),
+		resolveCache: cache2go.Cache("resolveCache"),
+		listen:       cfg.Listen,
+		db:           db,
 	}
-	if cfg.StoreAnnounces {
+	if s.listen {
 		dhtCfg = dht.ServerConfig{
 			StartingNodes: dht.GlobalBootstrapAddrs,
 			//OnQuery:       s.OnQuery,
@@ -208,7 +206,7 @@ func NewServer(cfg *ServerConfig) *Server {
 		http.HandleFunc("/dht", func(w http.ResponseWriter, r *http.Request) {
 			cl.DHT().WriteStatus(w)
 		})
-		if cfg.StoreAnnounces {
+		if s.listen {
 			log.Println("Web stats listening on: http://0.0.0.0:8888")
 		}
 		log.Fatal(http.ListenAndServe(":8888", nil))

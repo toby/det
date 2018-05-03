@@ -7,8 +7,8 @@ import (
 
 func CmdListen(c *cli.Context) error {
 	cfg := server.ServerConfig{
-		StoreAnnounces: true,
-		Seed:           false,
+		Listen: true,
+		Seed:   false,
 	}
 	s := server.NewServer(&cfg)
 	s.Listen()

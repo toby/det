@@ -9,8 +9,8 @@ import (
 
 func CmdResolve(c *cli.Context) error {
 	cfg := server.ServerConfig{
-		StoreAnnounces: false,
-		Seed:           false,
+		Listen: false,
+		Seed:   false,
 	}
 	s := server.NewServer(&cfg)
 	var hash string

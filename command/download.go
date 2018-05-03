@@ -12,7 +12,11 @@ import (
 )
 
 func CmdDownload(c *cli.Context) error {
-	s := server.NewServer(false)
+	cfg := server.ServerConfig{
+		StoreAnnounces: false,
+		Seed:           false,
+	}
+	s := server.NewServer(&cfg)
 	defer s.Client.Close()
 	if c.NArg() > 0 {
 		mag := c.Args().Get(0)

@@ -40,7 +40,11 @@ func CmdSeed(c *cli.Context) error {
 		if err != nil {
 			panic(err)
 		}
-		s := server.NewServer(false)
+		cfg := server.ServerConfig{
+			StoreAnnounces: false,
+			Seed:           true,
+		}
+		s := server.NewServer(&cfg)
 		defer s.Client.Close()
 		t, err := s.Client.AddTorrent(&mi)
 		if err != nil {

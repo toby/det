@@ -8,7 +8,11 @@ import (
 )
 
 func CmdResolve(c *cli.Context) error {
-	s := server.NewServer(false)
+	cfg := server.ServerConfig{
+		StoreAnnounces: false,
+		Seed:           false,
+	}
+	s := server.NewServer(&cfg)
 	var hash string
 	if c.NArg() > 0 {
 		hash = c.Args().Get(0)

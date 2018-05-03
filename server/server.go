@@ -34,6 +34,11 @@ type Server struct {
 	listenAnnounce bool
 }
 
+type ServerConfig struct {
+	StoreAnnounces bool
+	Seed           bool
+}
+
 type TorrentResolver interface {
 	AddHash(h string)
 }
@@ -153,17 +158,23 @@ func (s *Server) Listen() {
 	}
 }
 
-func NewServer(listenAnnounce bool) *Server {
+func NewServer(cfg *ServerConfig) *Server {
 	var dhtCfg dht.ServerConfig
+	if cfg == nil {
+		cfg = &ServerConfig{
+			StoreAnnounces: true,
+			Seed:           false,
+		}
+	}
 	db := NewSqliteDB("./")
 	s := &Server{
 		Client:         nil,
 		hashes:         make([]string, 0),
 		resolveCache:   cache2go.Cache("resolveCache"),
-		listenAnnounce: listenAnnounce,
+		listenAnnounce: cfg.StoreAnnounces,
 		db:             db,
 	}
-	if listenAnnounce {
+	if cfg.StoreAnnounces {
 		dhtCfg = dht.ServerConfig{
 			StartingNodes: dht.GlobalBootstrapAddrs,
 			//OnQuery:       s.OnQuery,
@@ -175,11 +186,11 @@ func NewServer(listenAnnounce bool) *Server {
 			OnAnnouncePeer: func(h metainfo.Hash, p dht.Peer) {},
 		}
 	}
-	cfg := torrent.Config{
+	torrentCfg := torrent.Config{
 		DHTConfig: dhtCfg,
-		Seed:      true,
+		Seed:      cfg.Seed,
 	}
-	cl, err := torrent.NewClient(&cfg)
+	cl, err := torrent.NewClient(&torrentCfg)
 	id := cl.PeerID()
 	log.Printf("Starting Detergent With Peer ID: %s", hex.EncodeToString(id[:]))
 	if err != nil {
@@ -197,7 +208,7 @@ func NewServer(listenAnnounce bool) *Server {
 		http.HandleFunc("/dht", func(w http.ResponseWriter, r *http.Request) {
 			cl.DHT().WriteStatus(w)
 		})
-		if listenAnnounce {
+		if cfg.StoreAnnounces {
 			log.Println("Web stats listening on: http://0.0.0.0:8888")
 		}
 		log.Fatal(http.ListenAndServe(":8888", nil))

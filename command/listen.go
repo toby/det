@@ -6,7 +6,11 @@ import (
 )
 
 func CmdListen(c *cli.Context) error {
-	s := server.NewServer(true)
+	cfg := server.ServerConfig{
+		StoreAnnounces: true,
+		Seed:           false,
+	}
+	s := server.NewServer(&cfg)
 	s.Listen()
 	return nil
 }

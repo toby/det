@@ -195,6 +195,14 @@ func NewServer(cfg *ServerConfig) *Server {
 		log.Fatalf("error creating client: %s", err)
 	}
 	s.Client = cl
+	if s.listen {
+		mi := DetAnnounceMetaInfo()
+		t, err := s.Client.AddTorrent(mi)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Seeding detergent.json: magnet:?xt=urn:btih:%s\n", t.InfoHash().HexString())
+	}
 
 	go func() {
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

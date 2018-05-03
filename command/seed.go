@@ -14,19 +14,11 @@ import (
 	"github.com/urfave/cli"
 )
 
-var (
-	builtinAnnounceList = [][]string{
-		{"udp://tracker.openbittorrent.com:80"},
-		{"udp://tracker.publicbt.com:80"},
-		{"udp://tracker.istole.it:6969"},
-	}
-)
-
 func CmdSeed(c *cli.Context) error {
 	if c.NArg() > 0 {
 		p := c.Args().Get(0)
 		mi := metainfo.MetaInfo{
-			AnnounceList: builtinAnnounceList,
+			AnnounceList: server.BuiltinAnnounceList,
 		}
 		mi.SetDefaults()
 		info := metainfo.Info{

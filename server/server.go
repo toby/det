@@ -201,7 +201,7 @@ func NewServer(cfg *ServerConfig) *Server {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("Seeding detergent.json: magnet:?xt=urn:btih:%s\n", t.InfoHash().HexString())
+		log.Printf("Seeding detergent.json: magnet:?xt=urn:btih:%s\n", t.InfoHash().HexString())
 	}
 
 	go func() {

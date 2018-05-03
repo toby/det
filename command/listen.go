@@ -8,7 +8,7 @@ import (
 func CmdListen(c *cli.Context) error {
 	cfg := server.ServerConfig{
 		Listen: true,
-		Seed:   false,
+		Seed:   true,
 	}
 	s := server.NewServer(&cfg)
 	s.Listen()

@@ -22,6 +22,6 @@ func CmdResolve(c *cli.Context) error {
 		return nil
 	}
 	s.AddHash(hash)
-	s.Listen()
+	s.Run()
 	return nil
 }

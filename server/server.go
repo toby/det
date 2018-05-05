@@ -32,6 +32,7 @@ type Server struct {
 	hashLock     sync.Mutex
 	resolveCache *cache2go.CacheTable
 	listen       bool
+	seed         bool
 }
 
 type ServerConfig struct {
@@ -126,7 +127,7 @@ func (s *Server) resolveHash(hx string) error {
 	return nil
 }
 
-func (s *Server) Listen() {
+func (s *Server) Run() {
 	sigs := make(chan os.Signal, 1)
 	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -138,7 +139,7 @@ func (s *Server) Listen() {
 			default:
 			}
 
-			if len(s.hashes) > 0 {
+			if s.listen && len(s.hashes) > 0 {
 				err := s.resolveHash(s.hashes[0])
 				if err != nil {
 					log.Println(err)
@@ -176,6 +177,7 @@ func NewServer(cfg *ServerConfig) *Server {
 		hashes:       make([]string, 0),
 		resolveCache: cache2go.Cache("resolveCache"),
 		listen:       cfg.Listen,
+		seed:         cfg.Seed,
 		db:           db,
 	}
 	if s.listen {
@@ -201,12 +203,22 @@ func NewServer(cfg *ServerConfig) *Server {
 		log.Fatalf("error creating client: %s", err)
 	}
 	s.Client = cl
-	if s.listen {
+	if s.seed {
 		t, err := s.SeedBytes("detergent.json", DetSemaphoreBytes())
 		if err != nil {
 			panic(err)
 		}
 		log.Printf("Seeding detergent.json: magnet:?xt=urn:btih:%s\n", t.InfoHash().HexString())
+		go func() {
+			for {
+				for _, p := range t.KnownSwarm() {
+					if s.seed && !s.listen {
+						log.Printf("Maybe Detergent Peer: %s:%d\n", p.IP, p.Port)
+					}
+				}
+				<-time.After(time.Second * 5)
+			}
+		}()
 	}
 
 	go func() {

@@ -5,9 +5,9 @@ import (
 	"github.com/urfave/cli"
 )
 
-func CmdListen(c *cli.Context) error {
+func CmdPeer(c *cli.Context) error {
 	cfg := server.ServerConfig{
-		Listen: true,
+		Listen: false,
 		Seed:   true,
 	}
 	s := server.NewServer(&cfg)

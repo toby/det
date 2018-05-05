@@ -88,6 +88,12 @@ var Commands = []cli.Command{
 		Flags:  []cli.Flag{},
 	},
 	{
+		Name:   "peer",
+		Usage:  "Respond to queries but don't listen for announces",
+		Action: command.CmdPeer,
+		Flags:  []cli.Flag{},
+	},
+	{
 		Name:    "info",
 		Usage:   "Show Detergent info",
 		Aliases: []string{"i"},

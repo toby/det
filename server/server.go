@@ -76,6 +76,9 @@ func (s *Server) AddHash(h string) error {
 }
 
 func (s *Server) onQuery(query *krpc.Msg, source net.Addr) bool {
+	if query.Q == "get_peers" && bytes.Equal(query.A.InfoHash, s.apiTorrent.InfoHash()) {
+		log.Printf("Detergent API GetPeers: %s", query.IP)
+	}
 	return true
 }
 

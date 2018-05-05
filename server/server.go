@@ -43,6 +43,12 @@ type TorrentResolver interface {
 	AddHash(h string)
 }
 
+func (s *Server) SeedBytes(name string, b []byte) (*torrent.Torrent, error) {
+	ts := TorrentSpecForBytes(name, b)
+	t, _, err := s.Client.AddTorrentSpec(ts)
+	return t, err
+}
+
 func (s *Server) AddHash(h string) error {
 	if len(h) != 40 {
 		return errors.New("Invalid hash length")
@@ -196,8 +202,7 @@ func NewServer(cfg *ServerConfig) *Server {
 	}
 	s.Client = cl
 	if s.listen {
-		ts := DetAnnounceTorrentSpec()
-		t, _, err := s.Client.AddTorrentSpec(ts)
+		t, err := s.SeedBytes("detergent.json", DetSemaphoreBytes())
 		if err != nil {
 			panic(err)
 		}

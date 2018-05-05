@@ -2,22 +2,20 @@ package server
 
 import (
 	"encoding/json"
-
-	"github.com/anacrolix/torrent"
 )
 
-const DetVersion = "0.1"
+const DetApiVersion = "0.1"
 
-type DetAnnounce struct {
+type DetSemaphore struct {
 	Name    string
 	Version string
 }
 
-func DetAnnounceTorrentSpec() *torrent.TorrentSpec {
-	d := DetAnnounce{
+func DetSemaphoreBytes() []byte {
+	d := DetSemaphore{
 		Name:    "detergent",
-		Version: DetVersion,
+		Version: DetApiVersion,
 	}
 	b, _ := json.Marshal(d)
-	return TorrentSpecForBytes("detergent.json", b)
+	return b
 }

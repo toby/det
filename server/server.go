@@ -33,6 +33,7 @@ type Server struct {
 	resolveCache *cache2go.CacheTable
 	listen       bool
 	seed         bool
+	apiTorrent   *torrent.Torrent
 }
 
 type ServerConfig struct {
@@ -74,18 +75,11 @@ func (s *Server) AddHash(h string) error {
 	return nil
 }
 
-func (s *Server) OnQuery(query *krpc.Msg, source net.Addr) bool {
-	s.hashLock.Lock()
-	defer s.hashLock.Unlock()
-	if query.Q == "get_peers" {
-		if err := s.AddHash(hex.EncodeToString(query.A.InfoHash[:])); err != nil {
-			log.Printf("Error adding hash: %s", err)
-		}
-	}
+func (s *Server) onQuery(query *krpc.Msg, source net.Addr) bool {
 	return true
 }
 
-func (s *Server) OnAnnouncePeer(h metainfo.Hash, peer dht.Peer) {
+func (s *Server) onAnnouncePeer(h metainfo.Hash, peer dht.Peer) {
 	s.hashLock.Lock()
 	defer s.hashLock.Unlock()
 	hx := h.HexString()
@@ -164,7 +158,6 @@ func (s *Server) Run() {
 }
 
 func NewServer(cfg *ServerConfig) *Server {
-	var dhtCfg dht.ServerConfig
 	if cfg == nil {
 		cfg = &ServerConfig{
 			Listen: true,
@@ -179,21 +172,18 @@ func NewServer(cfg *ServerConfig) *Server {
 		listen:       cfg.Listen,
 		seed:         cfg.Seed,
 		db:           db,
+		apiTorrent:   nil,
 	}
+
+	dcfg := dht.ServerConfig{StartingNodes: dht.GlobalBootstrapAddrs}
 	if s.listen {
-		dhtCfg = dht.ServerConfig{
-			StartingNodes: dht.GlobalBootstrapAddrs,
-			//OnQuery:       s.OnQuery,
-			OnAnnouncePeer: s.OnAnnouncePeer,
-		}
-	} else {
-		dhtCfg = dht.ServerConfig{
-			StartingNodes:  dht.GlobalBootstrapAddrs,
-			OnAnnouncePeer: func(h metainfo.Hash, p dht.Peer) {},
-		}
+		dcfg.OnAnnouncePeer = s.onAnnouncePeer
+	}
+	if s.seed {
+		dcfg.OnQuery = s.onQuery
 	}
 	torrentCfg := torrent.Config{
-		DHTConfig: dhtCfg,
+		DHTConfig: dcfg,
 		Seed:      cfg.Seed,
 	}
 	cl, err := torrent.NewClient(&torrentCfg)
@@ -208,10 +198,11 @@ func NewServer(cfg *ServerConfig) *Server {
 		if err != nil {
 			panic(err)
 		}
-		log.Printf("Seeding detergent.json: magnet:?xt=urn:btih:%s\n", t.InfoHash().HexString())
+		s.apiTorrent = t
+		log.Printf("Seeding detergent.json: magnet:?xt=urn:btih:%s\n", s.apiTorrent.InfoHash().HexString())
 		go func() {
 			for {
-				for _, p := range t.KnownSwarm() {
+				for _, p := range s.apiTorrent.KnownSwarm() {
 					if s.seed && !s.listen {
 						log.Printf("Maybe Detergent Peer: %s:%d\n", p.IP, p.Port)
 					}

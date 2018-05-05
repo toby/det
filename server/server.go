@@ -196,8 +196,8 @@ func NewServer(cfg *ServerConfig) *Server {
 	}
 	s.Client = cl
 	if s.listen {
-		mi := DetAnnounceMetaInfo()
-		t, err := s.Client.AddTorrent(mi)
+		ts := DetAnnounceTorrentSpec()
+		t, _, err := s.Client.AddTorrentSpec(ts)
 		if err != nil {
 			panic(err)
 		}

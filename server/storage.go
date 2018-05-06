@@ -219,6 +219,13 @@ func (me *SqliteDBClient) SetTorrentMeta(hash string, name string) error {
 }
 
 func (me *SqliteDBClient) CreateTorrentSearch(hash string, name string) error {
-	_, err := dot.Exec(me.db, "create-torrent-search", hash, name)
-	return err
+	t, err := me.GetTorrent(hash)
+	if err != nil {
+		return err
+	}
+	if t.Name == "" {
+		_, err = dot.Exec(me.db, "create-torrent-search", hash, name)
+		return err
+	}
+	return nil
 }

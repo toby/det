@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS torrent(
   name TEXT DEFAULT NULL,
   resolved_at DATE DEFAULT NULL,
   created_at DATE DEFAULT (strftime('%s', 'now')),
-  announce_count INTEGER DEFAULT 0
+  announce_count INTEGER DEFAULT 0,
+  unique(infoHash) ON CONFLICT IGNORE
 );
 
 -- name: create-announce-table
@@ -17,7 +18,7 @@ CREATE TABLE IF NOT EXISTS announce(
 
 -- name: create-search-table
 CREATE VIRTUAL TABLE IF NOT EXISTS search_torrent
-USING FTS4(name, infoHash);
+USING FTS4(infoHash PRIMARY KEY, name TEXT);
 
 -- name: create-torrent
 INSERT INTO torrent (infoHash) VALUES (?)
@@ -37,10 +38,11 @@ SET name = ?, resolved_at = (strftime('%s', 'now'))
 WHERE infohash = ?;
 
 -- name: get-torrent
-SELECT infoHash, name, created_at, resolved_at FROM torrent WHERE infoHash = ?
+SELECT announce_count, infoHash, name, created_at, resolved_at
+FROM torrent WHERE infoHash = ?
 
 -- name: search-torrents
-SELECT t.announce_count, t.infoHash, t.name, t.resolved_at, t.created_at
+SELECT t.announce_count, t.infoHash, t.name, t.created_at, t.resolved_at
 FROM search_torrent AS s
 INNER JOIN torrent AS t ON s.infoHash = t.infoHash
 WHERE s.name MATCH ?

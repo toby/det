@@ -96,8 +96,8 @@ func (s *Server) resolveHash(hx string) error {
 		if new {
 			select {
 			case <-t.GotInfo():
-				s.db.SetTorrentMeta(t.InfoHash().HexString(), t.Name())
 				s.db.CreateTorrentSearch(t.InfoHash().HexString(), t.Name())
+				s.db.SetTorrentMeta(t.InfoHash().HexString(), t.Name())
 				log.Printf("Resolved:\t%s\t%s", t.InfoHash().HexString(), t.Name())
 			case <-time.After(time.Second * 2):
 				log.Printf("Timeout:\t%s", h)

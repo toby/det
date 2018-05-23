@@ -76,7 +76,20 @@ func (b TorrentBytes) WriteAt(p []byte, off int64) (n int, err error) {
 	return 0, nil
 }
 
-func InfoForBytes(name string, b TorrentBytes) (*metainfo.Info, storage.ClientImpl) {
+func torrentSpecForInfo(i *metainfo.Info, s storage.ClientImpl) *torrent.TorrentSpec {
+	mi := &metainfo.MetaInfo{AnnounceList: BuiltinAnnounceList}
+	mi.SetDefaults()
+	ib, err := bencode.Marshal(i)
+	if err != nil {
+		panic(err)
+	}
+	mi.InfoBytes = ib
+	ts := torrent.TorrentSpecFromMetaInfo(mi)
+	ts.Storage = s
+	return ts
+}
+
+func (b TorrentBytes) TorrentInfo(name string) *metainfo.Info {
 	info := metainfo.Info{
 		Name:        name,
 		Length:      int64(len(b)),
@@ -86,15 +99,11 @@ func InfoForBytes(name string, b TorrentBytes) (*metainfo.Info, storage.ClientIm
 	info.GeneratePieces(func(fi metainfo.FileInfo) (io.ReadCloser, error) {
 		return ioutil.NopCloser(bytes.NewReader(b)), nil
 	})
-	return &info, b
+	return &info
 }
 
-func TorrentSpecForBytes(name string, b TorrentBytes) *torrent.TorrentSpec {
-	i, s := InfoForBytes(name, b)
-	mi := &metainfo.MetaInfo{AnnounceList: BuiltinAnnounceList}
-	mi.SetDefaults()
-	mi.InfoBytes, _ = bencode.Marshal(i)
-	ts := torrent.TorrentSpecFromMetaInfo(mi)
-	ts.Storage = s
+func (b TorrentBytes) TorrentSpec(name string) *torrent.TorrentSpec {
+	i := b.TorrentInfo(name)
+	ts := torrentSpecForInfo(i, b)
 	return ts
 }

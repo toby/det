@@ -46,8 +46,8 @@ type TorrentResolver interface {
 	AddHash(h string)
 }
 
-func (s *Server) SeedBytes(name string, b []byte) (*torrent.Torrent, error) {
-	ts := TorrentSpecForBytes(name, b)
+func (s *Server) SeedBytes(name string, b TorrentBytes) (*torrent.Torrent, error) {
+	ts := b.TorrentSpec(name)
 	t, _, err := s.Client.AddTorrentSpec(ts)
 	return t, err
 }

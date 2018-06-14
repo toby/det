@@ -24,6 +24,7 @@ import (
 	"github.com/muesli/cache2go"
 )
 
+const ResolveTimeout = time.Second * 30
 const ResolveWindow = time.Minute * 10
 
 type Server struct {
@@ -109,7 +110,7 @@ func (s *Server) resolveHash(hx string) error {
 				s.db.CreateTorrentSearch(t.InfoHash().HexString(), t.Name())
 				s.db.SetTorrentMeta(t.InfoHash().HexString(), t.Name())
 				log.Printf("Resolved:\t%s\t%s", t.InfoHash().HexString(), t.Name())
-			case <-time.After(time.Second * 2):
+			case <-time.After(ResolveTimeout):
 				log.Printf("Timeout:\t%s", h)
 			}
 		} else {

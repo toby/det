@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 
@@ -26,43 +25,35 @@ type TorrentBytes []byte
 
 // ClientImpl
 func (b TorrentBytes) OpenTorrent(info *metainfo.Info, infoHash metainfo.Hash) (storage.TorrentImpl, error) {
-	fmt.Println("ClientImpl.OpenTorrent()")
 	return b, nil
 }
 
 // TorrentImpl
 func (b TorrentBytes) Piece(p metainfo.Piece) storage.PieceImpl {
-	fmt.Println("TorrentImpl.Piece()")
-	fmt.Printf("Piece Index: %d, Piece Length %d, Piece Offset %d\n", p.Index(), p.Length(), p.Offset())
 	off := p.Offset()
 	l := off + p.Length()
 	return b[off:l]
 }
 
 func (b TorrentBytes) Close() error {
-	fmt.Println("TorrentImpl.Close()")
 	return nil
 }
 
 // PieceImpl
 func (b TorrentBytes) MarkComplete() error {
-	fmt.Println("PieceImpl.MarkComplete()")
 	return nil
 }
 
 func (b TorrentBytes) MarkNotComplete() error {
-	fmt.Println("PieceImpl.MarkNotComplete()")
 	return nil
 }
 
 func (b TorrentBytes) Completion() storage.Completion {
-	fmt.Println("PieceImpl.Completion()")
 	return storage.Completion{true, true}
 }
 
 // io.ReaderAt
 func (b TorrentBytes) ReadAt(p []byte, off int64) (n int, err error) {
-	fmt.Println("io.ReaderAt.ReadAt()")
 	if off >= int64(len(b)) {
 		return 0, errors.New("Offset too large")
 	}
@@ -72,7 +63,6 @@ func (b TorrentBytes) ReadAt(p []byte, off int64) (n int, err error) {
 
 // io.WriterAt
 func (b TorrentBytes) WriteAt(p []byte, off int64) (n int, err error) {
-	fmt.Println("io.WriterAt.WriteAt()")
 	return 0, nil
 }
 

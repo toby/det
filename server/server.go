@@ -128,35 +128,21 @@ func (s *Server) resolveHash(hx string) error {
 
 func (s *Server) Run() {
 	sigs := make(chan os.Signal, 1)
-	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		for {
-			select {
-			case <-sigs:
-				done <- true
-			default:
-			}
-
-			if s.listen && len(s.hashes) > 0 {
+			if len(s.hashes) > 0 {
 				err := s.resolveHash(s.hashes[0])
 				if err != nil {
 					log.Println(err)
 				}
 				s.hashes = s.hashes[1:]
-				if !s.listen {
-					done <- true
-				}
 			} else {
-				select {
-				case <-time.After(time.Second):
-				case <-sigs:
-					done <- true
-				}
+				<-time.After(time.Second)
 			}
 		}
 	}()
-	<-done
+	<-sigs
 	s.db.Close()
 	log.Printf("Exiting Detergent, here are some stats:")
 	s.Client.WriteStatus(os.Stderr)

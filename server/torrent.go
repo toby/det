@@ -2,7 +2,6 @@ package server
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"io/ioutil"
 
@@ -32,7 +31,10 @@ func (b TorrentBytes) OpenTorrent(info *metainfo.Info, infoHash metainfo.Hash) (
 func (b TorrentBytes) Piece(p metainfo.Piece) storage.PieceImpl {
 	off := p.Offset()
 	l := off + p.Length()
-	return b[off:l]
+	if len(b) >= int(off) && len(b) >= int(l) {
+		return b[off:l]
+	}
+	return make(TorrentBytes, 0)
 }
 
 func (b TorrentBytes) Close() error {
@@ -49,13 +51,17 @@ func (b TorrentBytes) MarkNotComplete() error {
 }
 
 func (b TorrentBytes) Completion() storage.Completion {
-	return storage.Completion{true, true}
+	if len(b) == 0 {
+		return storage.Completion{false, false}
+	} else {
+		return storage.Completion{true, true}
+	}
 }
 
 // io.ReaderAt
 func (b TorrentBytes) ReadAt(p []byte, off int64) (n int, err error) {
 	if off >= int64(len(b)) {
-		return 0, errors.New("Offset too large")
+		return 0, nil
 	}
 	n = copy(p, b[off:])
 	return n, nil

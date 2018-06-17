@@ -103,7 +103,7 @@ func (s *Server) resolveHash(hx string) error {
 	st, err := s.db.GetTorrent(hx)
 	if err == sql.ErrNoRows || st.ResolvedAt.IsZero() {
 		h := metainfo.NewHashFromHex(hx)
-		t, new := s.Client.AddTorrentInfoHash(h)
+		t, new := s.Client.AddTorrentInfoHashWithStorage(h, make(TorrentBytes, 0))
 		if new {
 			select {
 			case <-t.GotInfo():

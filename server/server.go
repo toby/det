@@ -193,9 +193,17 @@ func NewServer(cfg *ServerConfig) *Server {
 		log.Printf("Seeding detergent.json: magnet:?xt=urn:btih:%s\n", s.apiTorrent.InfoHash().HexString())
 		go func() {
 			for {
+				dht := s.Client.DHT()
 				for _, p := range s.apiTorrent.KnownSwarm() {
 					if s.seed && !s.listen {
-						log.Printf("Maybe Detergent Peer: %s:%d\n", p.IP, p.Port)
+						ip := fmt.Sprintf("%s:%d", p.IP, p.Port)
+						log.Printf("Maybe Detergent Peer: %s\n", ip)
+						a, err := net.ResolveUDPAddr("udp", ip)
+						if err == nil {
+							dht.Ping(a, func(m krpc.Msg, err error) {
+								log.Printf("PONG: %s", m)
+							})
+						}
 					}
 				}
 				<-time.After(time.Second * 5)

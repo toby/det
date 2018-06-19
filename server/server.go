@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -179,9 +178,9 @@ func NewServer(cfg *ServerConfig) *Server {
 	}
 	cl, err := torrent.NewClient(&torrentCfg)
 	id := cl.PeerID()
-	log.Printf("Torrent Peer ID: %s", hex.EncodeToString(id[:]))
+	log.Printf("Torrent Peer ID: %s", metainfo.HashBytes(id[:]).HexString())
 	id = cl.DHT().ID()
-	log.Printf("DHT Node ID: %s", hex.EncodeToString(id[:]))
+	log.Printf("DHT Node ID: %s", metainfo.HashBytes(id[:]).HexString())
 	if err != nil {
 		log.Fatalf("error creating client: %s", err)
 	}

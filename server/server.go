@@ -198,14 +198,12 @@ func NewServer(cfg *ServerConfig) *Server {
 				for _, p := range s.apiTorrent.KnownSwarm() {
 					if s.seed && !s.listen {
 						ip := fmt.Sprintf("%s:%d", p.IP, p.Port)
-						log.Printf("Maybe Detergent Peer: %s\n", ip)
 						a, err := net.ResolveUDPAddr("udp", ip)
 						if err == nil {
 							dht.Ping(a, func(m krpc.Msg, err error) {
-								if err != nil {
-									log.Printf("PING ERROR: %s", err)
-								} else {
-									log.Printf("PONG: %s", metainfo.HashBytes(m.R.ID[:]).HexString())
+								if err == nil {
+									h := metainfo.HashBytes(m.R.ID[:]).HexString()
+									log.Printf("Maybe Detergent Peer: %s\t%s", h, ip)
 								}
 							})
 						}

@@ -179,7 +179,9 @@ func NewServer(cfg *ServerConfig) *Server {
 	}
 	cl, err := torrent.NewClient(&torrentCfg)
 	id := cl.PeerID()
-	log.Printf("Starting Detergent With Peer ID: %s", hex.EncodeToString(id[:]))
+	log.Printf("Torrent Peer ID: %s", hex.EncodeToString(id[:]))
+	id = cl.DHT().ID()
+	log.Printf("DHT Node ID: %s", hex.EncodeToString(id[:]))
 	if err != nil {
 		log.Fatalf("error creating client: %s", err)
 	}
@@ -201,7 +203,11 @@ func NewServer(cfg *ServerConfig) *Server {
 						a, err := net.ResolveUDPAddr("udp", ip)
 						if err == nil {
 							dht.Ping(a, func(m krpc.Msg, err error) {
-								log.Printf("PONG: %s", m)
+								if err != nil {
+									log.Printf("PING ERROR: %s", err)
+								} else {
+									log.Printf("PONG: %s", metainfo.HashBytes(m.R.ID[:]).HexString())
+								}
 							})
 						}
 					}

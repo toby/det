@@ -156,6 +156,17 @@ func (s *Server) resolveHash(hx string) error {
 	return nil
 }
 
+func (s *Server) resolvePeer(h metainfo.Hash) {
+	t, _ := s.Client.AddTorrentInfoHashWithStorage(h, make(TorrentBytes, 0))
+	select {
+	case <-t.GotInfo():
+		log.Printf("Peer Resolved:\t%s", t.InfoHash().HexString())
+	case <-time.After(time.Second * 2):
+		log.Printf("Peer Timeout:\t%s", h)
+	}
+	t.Drop()
+}
+
 func (s *Server) Run() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -229,8 +240,9 @@ func NewServer(cfg *ServerConfig) *Server {
 						if err == nil {
 							dht.Ping(a, func(m krpc.Msg, err error) {
 								if err == nil {
-									h := metainfo.HashBytes(m.R.ID[:]).HexString()
-									log.Printf("Maybe Detergent Peer: %s\t%s", h, ip)
+									h := metainfo.HashBytes(m.R.ID[:])
+									log.Printf("Maybe Detergent Peer: %s\t%s", h.HexString(), ip)
+									s.resolvePeer(h)
 								}
 							})
 						}

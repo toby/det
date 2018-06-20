@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -15,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"git.playgrub.com/toby/det/server/messages"
 	"github.com/anacrolix/dht"
 	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/torrent"
@@ -46,10 +48,39 @@ type TorrentResolver interface {
 	AddHash(h string)
 }
 
-func (s *Server) SeedBytes(name string, b TorrentBytes) (*torrent.Torrent, error) {
-	ts := b.TorrentSpec(name)
-	t, _, err := s.Client.AddTorrentSpec(ts)
+func (s *Server) SeedMessage(name string, m messages.Message) (*torrent.Torrent, error) {
+	var b TorrentBytes
+	var err error
+	var ts *torrent.TorrentSpec
+	var t *torrent.Torrent
+
+	b, err = json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	ts = b.TorrentSpec(name)
+	t, _, err = s.Client.AddTorrentSpec(ts)
 	return t, err
+}
+
+func (s *Server) SeedVersion() {
+	t, err := s.SeedMessage("detergent.json", messages.CurrentVersion())
+	if err != nil {
+		panic(err)
+	}
+	s.apiTorrent = t
+	log.Printf("Seeding detergent.json: magnet:?xt=urn:btih:%s\n", s.apiTorrent.InfoHash().HexString())
+}
+
+func (s *Server) SeedPeer() {
+	id := s.Client.DHT().ID()
+	h := metainfo.HashBytes(id[:])
+	n := fmt.Sprintf("%s.json", h.HexString())
+	t, err := s.SeedMessage(n, messages.CreatePeer(h))
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("Seeding %s: magnet:?xt=urn:btih:%s\n", n, t.InfoHash().HexString())
 }
 
 func (s *Server) AddHash(h string) error {
@@ -186,12 +217,8 @@ func NewServer(cfg *ServerConfig) *Server {
 	}
 	s.Client = cl
 	if s.seed {
-		t, err := s.SeedBytes("detergent.json", DetSemaphoreBytes())
-		if err != nil {
-			panic(err)
-		}
-		s.apiTorrent = t
-		log.Printf("Seeding detergent.json: magnet:?xt=urn:btih:%s\n", s.apiTorrent.InfoHash().HexString())
+		s.SeedVersion()
+		s.SeedPeer()
 		go func() {
 			for {
 				dht := s.Client.DHT()

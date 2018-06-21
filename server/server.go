@@ -165,12 +165,16 @@ func (s *Server) resolveHash(hx string) error {
 func (s *Server) resolvePeer(h metainfo.Hash) {
 	go func() {
 		if t, _ := s.Client.Torrent(h); t == nil {
-			log.Printf("Resolving: %s", h.HexString())
-			t, _ := s.Client.AddTorrentInfoHash(h)
+			log.Printf("Resolving Peer: %s", h.HexString())
+			n := fmt.Sprintf("%s.json", h.HexString())
+			t, err := s.SeedMessage(n, messages.CreatePeer(h))
+			if err != nil {
+				panic(err)
+			}
 			select {
 			case <-t.GotInfo():
-				log.Printf("Peer Resolved:\t%s", t.InfoHash().HexString())
-			case <-time.After(time.Second * 200):
+				log.Printf("Peer Resolved:\t%s", h.HexString())
+			case <-time.After(time.Second * 20000):
 				log.Printf("Peer Timeout:\t%s", h)
 			}
 			t.Drop()
@@ -199,13 +203,18 @@ func (s *Server) verifyPeer(p torrent.Peer) {
 func (s *Server) extractPeers(t *torrent.Torrent) chan torrent.Peer {
 	peers := make(chan torrent.Peer)
 	go func() {
+		l := &sync.Mutex{}
 		seen := make(map[string]torrent.Peer)
 		for {
 			for _, p := range t.KnownSwarm() {
 				h := metainfo.HashBytes(p.Id[:]).HexString()
+				l.Lock()
 				_, ok := seen[h]
+				l.Unlock()
 				if !ok {
+					l.Lock()
 					seen[h] = p
+					l.Unlock()
 					peers <- p
 				}
 			}

@@ -115,7 +115,7 @@ func (s *Server) AddHash(h string) error {
 
 func (s *Server) onQuery(query *krpc.Msg, source net.Addr) bool {
 	if query.Q == "get_peers" && bytes.Equal(query.A.InfoHash[:], s.versionTorrent.InfoHash().Bytes()) {
-		log.Printf("Detergent API GetPeers: %s", query.IP)
+		//log.Printf("Detergent API GetPeers: %s", query.IP)
 	}
 	return true
 }
@@ -163,14 +163,56 @@ func (s *Server) resolveHash(hx string) error {
 }
 
 func (s *Server) resolvePeer(h metainfo.Hash) {
-	t, _ := s.Client.AddTorrentInfoHashWithStorage(h, make(TorrentBytes, 0))
-	select {
-	case <-t.GotInfo():
-		log.Printf("Peer Resolved:\t%s", t.InfoHash().HexString())
-	case <-time.After(time.Second * 20):
-		log.Printf("Peer Timeout:\t%s", h)
+	go func() {
+		if t, _ := s.Client.Torrent(h); t == nil {
+			log.Printf("Resolving: %s", h.HexString())
+			t, _ := s.Client.AddTorrentInfoHash(h)
+			select {
+			case <-t.GotInfo():
+				log.Printf("Peer Resolved:\t%s", t.InfoHash().HexString())
+			case <-time.After(time.Second * 200):
+				log.Printf("Peer Timeout:\t%s", h)
+			}
+			t.Drop()
+		} else {
+			log.Printf("Already Resolving: %s", h.HexString())
+		}
+	}()
+}
+
+func (s *Server) verifyPeer(p torrent.Peer) {
+	dht := s.Client.DHT()
+	ip := fmt.Sprintf("%s:%d", p.IP, p.Port)
+	a, err := net.ResolveUDPAddr("udp", ip)
+	if err == nil {
+		log.Printf("Ping: %s", ip)
+		dht.Ping(a, func(m krpc.Msg, err error) {
+			if err == nil {
+				h := metainfo.HashBytes(m.R.ID[:])
+				log.Printf("Pong: %s\t%s", h.HexString(), ip)
+				s.resolvePeer(h)
+			}
+		})
 	}
-	t.Drop()
+}
+
+func (s *Server) extractPeers(t *torrent.Torrent) chan torrent.Peer {
+	peers := make(chan torrent.Peer)
+	go func() {
+		seen := make(map[string]torrent.Peer)
+		for {
+			for _, p := range t.KnownSwarm() {
+				h := metainfo.HashBytes(p.Id[:]).HexString()
+				_, ok := seen[h]
+				if !ok {
+					seen[h] = p
+					peers <- p
+				}
+			}
+			<-time.After(time.Second * 5)
+		}
+	}()
+	return peers
 }
 
 func (s *Server) Run() {
@@ -238,24 +280,9 @@ func NewServer(cfg *ServerConfig) *Server {
 		s.SeedVersion()
 		s.SeedPeer()
 		go func() {
-			for {
-				dht := s.Client.DHT()
-				for _, p := range s.versionTorrent.KnownSwarm() {
-					if s.seed && !s.listen {
-						ip := fmt.Sprintf("%s:%d", p.IP, p.Port)
-						a, err := net.ResolveUDPAddr("udp", ip)
-						if err == nil {
-							dht.Ping(a, func(m krpc.Msg, err error) {
-								if err == nil {
-									h := metainfo.HashBytes(m.R.ID[:])
-									log.Printf("Maybe Detergent Peer: %s\t%s", h.HexString(), ip)
-									s.resolvePeer(h)
-								}
-							})
-						}
-					}
-				}
-				<-time.After(time.Second * 5)
+			peers := s.extractPeers(s.versionTorrent)
+			for p := range peers {
+				s.verifyPeer(p)
 			}
 		}()
 	}

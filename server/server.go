@@ -49,18 +49,18 @@ type TorrentResolver interface {
 	AddHash(h string)
 }
 
-func (s *Server) SeedMessage(name string, m messages.Message) (*torrent.Torrent, error) {
+func torrentSpecForMessage(name string, m messages.Message) *torrent.TorrentSpec {
 	var b TorrentBytes
-	var err error
-	var ts *torrent.TorrentSpec
-	var t *torrent.Torrent
-
-	b, err = json.Marshal(m)
+	b, err := json.Marshal(m)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	ts = b.TorrentSpec(name)
-	t, _, err = s.Client.AddTorrentSpec(ts)
+	return b.TorrentSpec(name)
+}
+
+func (s *Server) SeedMessage(name string, m messages.Message) (*torrent.Torrent, error) {
+	ts := torrentSpecForMessage(name, m)
+	t, _, err := s.Client.AddTorrentSpec(ts)
 	return t, err
 }
 
@@ -164,17 +164,23 @@ func (s *Server) resolveHash(hx string) error {
 
 func (s *Server) resolvePeer(h metainfo.Hash) {
 	go func() {
-		if t, _ := s.Client.Torrent(h); t == nil {
+		n := fmt.Sprintf("%s.json", h.HexString())
+		ts := torrentSpecForMessage(n, messages.CreatePeer(h))
+		if t, _ := s.Client.Torrent(ts.InfoHash); t == nil {
 			log.Printf("Resolving Peer: %s", h.HexString())
-			n := fmt.Sprintf("%s.json", h.HexString())
-			t, err := s.SeedMessage(n, messages.CreatePeer(h))
-			if err != nil {
-				panic(err)
-			}
+			t, _ := s.Client.AddTorrentInfoHash(ts.InfoHash)
 			select {
 			case <-t.GotInfo():
+				t.DownloadAll()
+				p := float64(0)
+				for p != 100 {
+					br := t.Stats().ConnStats.BytesReadUsefulData
+					p = 100 * float64(br) / float64(t.Length())
+					<-time.After(time.Second * 1)
+					log.Printf("P: %s, br: %s, t.len: %s", p, br, t.Length())
+				}
 				log.Printf("Peer Resolved:\t%s", h.HexString())
-			case <-time.After(time.Second * 20000):
+			case <-time.After(time.Second * 10):
 				log.Printf("Peer Timeout:\t%s", h)
 			}
 			t.Drop()

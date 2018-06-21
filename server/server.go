@@ -29,14 +29,15 @@ const ResolveTimeout = time.Second * 30
 const ResolveWindow = time.Minute * 10
 
 type Server struct {
-	Client       *torrent.Client
-	hashes       []string
-	db           *SqliteDBClient
-	hashLock     sync.Mutex
-	resolveCache *cache2go.CacheTable
-	listen       bool
-	seed         bool
-	apiTorrent   *torrent.Torrent
+	Client         *torrent.Client
+	hashes         []string
+	db             *SqliteDBClient
+	hashLock       sync.Mutex
+	resolveCache   *cache2go.CacheTable
+	listen         bool
+	seed           bool
+	versionTorrent *torrent.Torrent
+	peerTorrent    *torrent.Torrent
 }
 
 type ServerConfig struct {
@@ -64,23 +65,28 @@ func (s *Server) SeedMessage(name string, m messages.Message) (*torrent.Torrent,
 }
 
 func (s *Server) SeedVersion() {
-	t, err := s.SeedMessage("detergent.json", messages.CurrentVersion())
-	if err != nil {
-		panic(err)
+	if s.versionTorrent == nil {
+		t, err := s.SeedMessage("detergent.json", messages.CurrentVersion())
+		if err != nil {
+			panic(err)
+		}
+		s.versionTorrent = t
+		log.Printf("Seeding detergent.json: magnet:?xt=urn:btih:%s\n", s.versionTorrent.InfoHash().HexString())
 	}
-	s.apiTorrent = t
-	log.Printf("Seeding detergent.json: magnet:?xt=urn:btih:%s\n", s.apiTorrent.InfoHash().HexString())
 }
 
 func (s *Server) SeedPeer() {
-	id := s.Client.DHT().ID()
-	h := metainfo.HashBytes(id[:])
-	n := fmt.Sprintf("%s.json", h.HexString())
-	t, err := s.SeedMessage(n, messages.CreatePeer(h))
-	if err != nil {
-		panic(err)
+	if s.peerTorrent == nil {
+		id := s.Client.DHT().ID()
+		h := metainfo.HashBytes(id[:])
+		n := fmt.Sprintf("%s.json", h.HexString())
+		t, err := s.SeedMessage(n, messages.CreatePeer(h))
+		if err != nil {
+			panic(err)
+		}
+		s.peerTorrent = t
+		log.Printf("Seeding %s: magnet:?xt=urn:btih:%s\n", n, t.InfoHash().HexString())
 	}
-	log.Printf("Seeding %s: magnet:?xt=urn:btih:%s\n", n, t.InfoHash().HexString())
 }
 
 func (s *Server) AddHash(h string) error {
@@ -108,7 +114,7 @@ func (s *Server) AddHash(h string) error {
 }
 
 func (s *Server) onQuery(query *krpc.Msg, source net.Addr) bool {
-	if query.Q == "get_peers" && bytes.Equal(query.A.InfoHash[:], s.apiTorrent.InfoHash().Bytes()) {
+	if query.Q == "get_peers" && bytes.Equal(query.A.InfoHash[:], s.versionTorrent.InfoHash().Bytes()) {
 		log.Printf("Detergent API GetPeers: %s", query.IP)
 	}
 	return true
@@ -161,7 +167,7 @@ func (s *Server) resolvePeer(h metainfo.Hash) {
 	select {
 	case <-t.GotInfo():
 		log.Printf("Peer Resolved:\t%s", t.InfoHash().HexString())
-	case <-time.After(time.Second * 2):
+	case <-time.After(time.Second * 20):
 		log.Printf("Peer Timeout:\t%s", h)
 	}
 	t.Drop()
@@ -198,13 +204,14 @@ func NewServer(cfg *ServerConfig) *Server {
 	}
 	db := NewSqliteDB("./")
 	s := &Server{
-		Client:       nil,
-		hashes:       make([]string, 0),
-		resolveCache: cache2go.Cache("resolveCache"),
-		listen:       cfg.Listen,
-		seed:         cfg.Seed,
-		db:           db,
-		apiTorrent:   nil,
+		Client:         nil,
+		hashes:         make([]string, 0),
+		resolveCache:   cache2go.Cache("resolveCache"),
+		listen:         cfg.Listen,
+		seed:           cfg.Seed,
+		db:             db,
+		versionTorrent: nil,
+		peerTorrent:    nil,
 	}
 
 	dcfg := dht.ServerConfig{StartingNodes: dht.GlobalBootstrapAddrs}
@@ -233,7 +240,7 @@ func NewServer(cfg *ServerConfig) *Server {
 		go func() {
 			for {
 				dht := s.Client.DHT()
-				for _, p := range s.apiTorrent.KnownSwarm() {
+				for _, p := range s.versionTorrent.KnownSwarm() {
 					if s.seed && !s.listen {
 						ip := fmt.Sprintf("%s:%d", p.IP, p.Port)
 						a, err := net.ResolveUDPAddr("udp", ip)

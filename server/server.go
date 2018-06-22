@@ -21,6 +21,7 @@ import (
 	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/storage"
 	"github.com/mattn/go-sqlite3"
 	"github.com/muesli/cache2go"
 )
@@ -279,8 +280,9 @@ func NewServer(cfg *ServerConfig) *Server {
 		dcfg.OnQuery = s.onQuery
 	}
 	torrentCfg := torrent.Config{
-		DHTConfig: dcfg,
-		Seed:      cfg.Seed,
+		DHTConfig:      dcfg,
+		Seed:           cfg.Seed,
+		DefaultStorage: storage.NewBoltDB("./"),
 	}
 	cl, err := torrent.NewClient(&torrentCfg)
 	id := cl.PeerID()

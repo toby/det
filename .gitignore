@@ -3,3 +3,4 @@ det
 *.test
 sqlite.db
 .torrent.bolt.db
+bolt.db

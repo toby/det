@@ -39,6 +39,7 @@ type Server struct {
 	seed           bool
 	versionTorrent *torrent.Torrent
 	peerTorrent    *torrent.Torrent
+	peers          []torrent.Peer
 }
 
 type ServerConfig struct {
@@ -163,72 +164,103 @@ func (s *Server) resolveHash(hx string) error {
 	return nil
 }
 
-func (s *Server) resolvePeer(h metainfo.Hash) {
+func (s *Server) DownloadTorrentSpec(ts *torrent.TorrentSpec, timeout time.Duration) <-chan *torrent.Torrent {
+	out := make(chan *torrent.Torrent)
 	go func() {
-		n := fmt.Sprintf("%s.json", h.HexString())
-		ts := torrentSpecForMessage(n, messages.CreatePeer(h))
-		if t, _ := s.Client.Torrent(ts.InfoHash); t == nil {
-			log.Printf("Resolving Peer: %s", h.HexString())
-			t, _ := s.Client.AddTorrentInfoHash(ts.InfoHash)
-			select {
-			case <-t.GotInfo():
-				t.DownloadAll()
-				p := float64(0)
-				for p != 100 {
-					br := t.Stats().ConnStats.BytesReadUsefulData
-					p = 100 * float64(br) / float64(t.Length())
-					<-time.After(time.Second * 1)
-					log.Printf("P: %s, br: %s, t.len: %s", p, br, t.Length())
-				}
-				log.Printf("Peer Resolved:\t%s", h.HexString())
-			case <-time.After(time.Second * 10):
-				log.Printf("Peer Timeout:\t%s", h)
-			}
-			t.Drop()
-		} else {
-			log.Printf("Already Resolving: %s", h.HexString())
+		if t, _ := s.Client.Torrent(ts.InfoHash); t != nil {
+			close(out)
+			return
 		}
-	}()
-}
-
-func (s *Server) verifyPeer(p torrent.Peer) {
-	dht := s.Client.DHT()
-	ip := fmt.Sprintf("%s:%d", p.IP, p.Port)
-	a, err := net.ResolveUDPAddr("udp", ip)
-	if err == nil {
-		log.Printf("Ping: %s", ip)
-		dht.Ping(a, func(m krpc.Msg, err error) {
-			if err == nil {
-				h := metainfo.HashBytes(m.R.ID[:])
-				log.Printf("Pong: %s\t%s", h.HexString(), ip)
-				s.resolvePeer(h)
+		t, _ := s.Client.AddTorrentInfoHash(ts.InfoHash)
+		log.Printf("Downloading: %s", ts.DisplayName)
+		downloaded := make(chan bool)
+		stop := make(chan bool)
+		go func() {
+			<-t.GotInfo()
+			t.DownloadAll()
+			for {
+				br := t.Stats().ConnStats.BytesReadUsefulData
+				p := 100 * float64(br) / float64(t.Length())
+				if p == 100 {
+					downloaded <- true
+					return
+				}
+				select {
+				case <-time.After(time.Second * 10):
+					log.Printf("Downloaded: %.2f%% - %d of %d bytes", p, br, t.Length())
+				case <-stop:
+					return
+				}
 			}
-		})
-	}
+		}()
+		if timeout == 0 {
+			<-downloaded
+			out <- t
+		} else {
+			select {
+			case <-downloaded:
+				out <- t
+			case <-time.After(timeout):
+				log.Printf("Download timeout: %s", t.Name())
+			}
+		}
+		stop <- true
+		close(downloaded)
+		close(out)
+	}()
+	return out
 }
 
-func (s *Server) extractPeers(t *torrent.Torrent) chan torrent.Peer {
-	peers := make(chan torrent.Peer)
+func (s *Server) verifyPeers(in <-chan torrent.Peer) <-chan torrent.Peer {
+	out := make(chan torrent.Peer)
 	go func() {
-		l := &sync.Mutex{}
+		dht := s.Client.DHT()
+		for p := range in {
+			ip := fmt.Sprintf("%s:%d", p.IP, p.Port)
+			a, err := net.ResolveUDPAddr("udp", ip)
+			if err == nil {
+				h := metainfo.HashBytes(p.Id[:]).HexString()
+				log.Printf("Ping: %s\t%s", h, ip)
+				dht.Ping(a, func(m krpc.Msg, err error) {
+					if err == nil {
+						h := metainfo.HashBytes(m.R.ID[:])
+						log.Printf("Pong: %s\t%s", h.HexString(), ip)
+						n := fmt.Sprintf("%s.json", h.HexString())
+						ts := torrentSpecForMessage(n, messages.CreatePeer(h))
+						t := <-s.DownloadTorrentSpec(ts, time.Second*120)
+						if t != nil {
+							log.Printf("Peer Verified: %s", h.HexString())
+							t.Drop()
+							out <- p
+						} else {
+							log.Printf("Peer Not Verified: %s", h.HexString())
+						}
+					}
+				})
+			}
+		}
+		close(out)
+	}()
+	return out
+}
+
+func (s *Server) extractPeers(t *torrent.Torrent) <-chan torrent.Peer {
+	out := make(chan torrent.Peer)
+	go func() {
 		seen := make(map[string]torrent.Peer)
 		for {
 			for _, p := range t.KnownSwarm() {
 				h := metainfo.HashBytes(p.Id[:]).HexString()
-				l.Lock()
 				_, ok := seen[h]
-				l.Unlock()
 				if !ok {
-					l.Lock()
 					seen[h] = p
-					l.Unlock()
-					peers <- p
+					out <- p
 				}
 			}
 			<-time.After(time.Second * 5)
 		}
 	}()
-	return peers
+	return out
 }
 
 func (s *Server) Run() {
@@ -270,6 +302,7 @@ func NewServer(cfg *ServerConfig) *Server {
 		db:             db,
 		versionTorrent: nil,
 		peerTorrent:    nil,
+		peers:          make([]torrent.Peer, 0),
 	}
 
 	dcfg := dht.ServerConfig{StartingNodes: dht.GlobalBootstrapAddrs}
@@ -298,8 +331,8 @@ func NewServer(cfg *ServerConfig) *Server {
 		s.SeedPeer()
 		go func() {
 			peers := s.extractPeers(s.versionTorrent)
-			for p := range peers {
-				s.verifyPeer(p)
+			for p := range s.verifyPeers(peers) {
+				s.peers = append(s.peers, p)
 			}
 		}()
 	}

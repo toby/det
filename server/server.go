@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -47,10 +46,6 @@ type ServerConfig struct {
 	Seed   bool
 }
 
-type TorrentResolver interface {
-	AddHash(h string)
-}
-
 func torrentSpecForMessage(name string, m messages.Message) *torrent.TorrentSpec {
 	var b TorrentBytes
 	b, err := json.Marshal(m)
@@ -60,13 +55,105 @@ func torrentSpecForMessage(name string, m messages.Message) *torrent.TorrentSpec
 	return b.TorrentSpec(name)
 }
 
+func (s *Server) Run() {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		for {
+			if len(s.hashes) > 0 {
+				err := s.resolveAndStoreHash(s.hashes[0])
+				if err != nil {
+					log.Println(err)
+				}
+				s.hashes = s.hashes[1:]
+			} else {
+				<-time.After(time.Second)
+			}
+		}
+	}()
+	<-sigs
+	s.db.Close()
+	log.Printf("Exiting Detergent, here are some stats:")
+	s.Client.WriteStatus(os.Stderr)
+	s.Client.Close()
+}
+
+func (s *Server) ResolveHash(h metainfo.Hash, timeout time.Duration) *metainfo.Info {
+	t, _ := s.Client.Torrent(h)
+	if t == nil {
+		t, _ = s.Client.AddTorrentInfoHash(h)
+	}
+	select {
+	case <-t.GotInfo():
+		i := t.Info()
+		t.Drop()
+		return i
+	case <-time.After(timeout):
+		return nil
+	}
+}
+
+func (s *Server) DownloadInfoHash(h metainfo.Hash, timeout time.Duration, stor *storage.ClientImpl) <-chan *torrent.Torrent {
+	out := make(chan *torrent.Torrent)
+	go func() {
+		var t *torrent.Torrent
+		if t, _ = s.Client.Torrent(h); t != nil {
+			close(out)
+			return
+		}
+		if stor != nil {
+			t, _ = s.Client.AddTorrentInfoHashWithStorage(h, *stor)
+		} else {
+			t, _ = s.Client.AddTorrentInfoHash(h)
+		}
+		log.Printf("Downloading: %s", h)
+		downloaded := make(chan bool)
+		stop := make(chan bool)
+		go func() {
+			<-t.GotInfo()
+			log.Printf("Resolved: %s", t.Name())
+			t.DownloadAll()
+			for {
+				if t.BytesMissing() == 0 {
+					downloaded <- true
+					return
+				}
+				br := t.Stats().ConnStats.BytesReadUsefulData
+				p := 100 * float64(br) / float64(t.Length())
+				select {
+				case <-time.After(time.Second * 10):
+					log.Printf("Downloaded: %.2f%% - %d of %d bytes", p, br, t.Length())
+				case <-stop:
+					return
+				}
+			}
+		}()
+		if timeout == 0 {
+			<-downloaded
+			out <- t
+		} else {
+			select {
+			case <-downloaded:
+				out <- t
+			case <-time.After(timeout):
+				log.Printf("Download timeout: %s", t.Name())
+			}
+		}
+		stop <- true
+		close(stop)
+		close(downloaded)
+		close(out)
+	}()
+	return out
+}
+
 func (s *Server) SeedMessage(name string, m messages.Message) (*torrent.Torrent, error) {
 	ts := torrentSpecForMessage(name, m)
 	t, _, err := s.Client.AddTorrentSpec(ts)
 	return t, err
 }
 
-func (s *Server) SeedVersion() {
+func (s *Server) seedVersion() {
 	if s.versionTorrent == nil {
 		t, err := s.SeedMessage("detergent.json", messages.CurrentVersion())
 		if err != nil {
@@ -77,7 +164,7 @@ func (s *Server) SeedVersion() {
 	}
 }
 
-func (s *Server) SeedPeer() {
+func (s *Server) seedPeer() {
 	if s.peerTorrent == nil {
 		id := s.Client.DHT().ID()
 		h := metainfo.HashBytes(id[:])
@@ -91,7 +178,20 @@ func (s *Server) SeedPeer() {
 	}
 }
 
-func (s *Server) AddHash(h string) error {
+func (s *Server) onAnnouncePeer(h metainfo.Hash, peer dht.Peer) {
+	s.hashLock.Lock()
+	defer s.hashLock.Unlock()
+	hx := h.HexString()
+	if err := s.addHash(hx); err != nil {
+		log.Printf("Error adding hash: %s", err)
+		return
+	}
+	if err := s.db.CreateAnnounce(hx, peer.String()); err != nil {
+		log.Printf("CreateAnnounce Error:\t%s", err)
+	}
+}
+
+func (s *Server) addHash(h string) error {
 	if len(h) != 40 {
 		return errors.New("Invalid hash length")
 	}
@@ -100,10 +200,8 @@ func (s *Server) AddHash(h string) error {
 	if err != nil {
 		// duplicate hash
 		if err.(sqlite3.Error).Code != 19 {
-			log.Printf("AddHash Error:\t%s", err)
 			return err
 		}
-
 		// have we tried to resolve this in the last 10 mins?
 		if s.resolveCache.Exists(h) {
 			return nil
@@ -115,29 +213,7 @@ func (s *Server) AddHash(h string) error {
 	return nil
 }
 
-func (s *Server) onQuery(query *krpc.Msg, source net.Addr) bool {
-	if query.Q == "get_peers" && bytes.Equal(query.A.InfoHash[:], s.versionTorrent.InfoHash().Bytes()) {
-		//log.Printf("Detergent API GetPeers: %s", query.IP)
-	}
-	return true
-}
-
-func (s *Server) onAnnouncePeer(h metainfo.Hash, peer dht.Peer) {
-	s.hashLock.Lock()
-	defer s.hashLock.Unlock()
-	hx := h.HexString()
-
-	if err := s.AddHash(hx); err != nil {
-		log.Printf("Error adding hash: %s", err)
-		return
-	}
-
-	if err := s.db.CreateAnnounce(hx, peer.String()); err != nil {
-		log.Printf("CreateAnnounce Error:\t%s", err)
-	}
-}
-
-func (s *Server) resolveHash(hx string) error {
+func (s *Server) resolveAndStoreHash(hx string) error {
 	st, err := s.db.GetTorrent(hx)
 	if err == sql.ErrNoRows || st.ResolvedAt.IsZero() {
 		h := metainfo.NewHashFromHex(hx)
@@ -164,53 +240,6 @@ func (s *Server) resolveHash(hx string) error {
 	return nil
 }
 
-func (s *Server) DownloadTorrentSpec(ts *torrent.TorrentSpec, timeout time.Duration) <-chan *torrent.Torrent {
-	out := make(chan *torrent.Torrent)
-	go func() {
-		if t, _ := s.Client.Torrent(ts.InfoHash); t != nil {
-			close(out)
-			return
-		}
-		t, _ := s.Client.AddTorrentInfoHash(ts.InfoHash)
-		log.Printf("Downloading: %s", ts.DisplayName)
-		downloaded := make(chan bool)
-		stop := make(chan bool)
-		go func() {
-			<-t.GotInfo()
-			t.DownloadAll()
-			for {
-				br := t.Stats().ConnStats.BytesReadUsefulData
-				p := 100 * float64(br) / float64(t.Length())
-				if p == 100 {
-					downloaded <- true
-					return
-				}
-				select {
-				case <-time.After(time.Second * 10):
-					log.Printf("Downloaded: %.2f%% - %d of %d bytes", p, br, t.Length())
-				case <-stop:
-					return
-				}
-			}
-		}()
-		if timeout == 0 {
-			<-downloaded
-			out <- t
-		} else {
-			select {
-			case <-downloaded:
-				out <- t
-			case <-time.After(timeout):
-				log.Printf("Download timeout: %s", t.Name())
-			}
-		}
-		stop <- true
-		close(downloaded)
-		close(out)
-	}()
-	return out
-}
-
 func (s *Server) verifyPeers(in <-chan torrent.Peer) <-chan torrent.Peer {
 	out := make(chan torrent.Peer)
 	go func() {
@@ -227,7 +256,7 @@ func (s *Server) verifyPeers(in <-chan torrent.Peer) <-chan torrent.Peer {
 						log.Printf("Pong: %s\t%s", h.HexString(), ip)
 						n := fmt.Sprintf("%s.json", h.HexString())
 						ts := torrentSpecForMessage(n, messages.CreatePeer(h))
-						t := <-s.DownloadTorrentSpec(ts, time.Second*120)
+						t := <-s.DownloadInfoHash(ts.InfoHash, time.Second*120, nil)
 						if t != nil {
 							log.Printf("Peer Verified: %s", h.HexString())
 							t.Drop()
@@ -263,28 +292,6 @@ func (s *Server) extractPeers(t *torrent.Torrent) <-chan torrent.Peer {
 	return out
 }
 
-func (s *Server) Run() {
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		for {
-			if len(s.hashes) > 0 {
-				err := s.resolveHash(s.hashes[0])
-				if err != nil {
-					log.Println(err)
-				}
-				s.hashes = s.hashes[1:]
-			} else {
-				<-time.After(time.Second)
-			}
-		}
-	}()
-	<-sigs
-	s.db.Close()
-	log.Printf("Exiting Detergent, here are some stats:")
-	s.Client.WriteStatus(os.Stderr)
-}
-
 func NewServer(cfg *ServerConfig) *Server {
 	if cfg == nil {
 		cfg = &ServerConfig{
@@ -309,9 +316,6 @@ func NewServer(cfg *ServerConfig) *Server {
 	if s.listen {
 		dcfg.OnAnnouncePeer = s.onAnnouncePeer
 	}
-	if s.seed {
-		dcfg.OnQuery = s.onQuery
-	}
 	torrentCfg := torrent.Config{
 		DHTConfig:      dcfg,
 		Seed:           cfg.Seed,
@@ -327,8 +331,8 @@ func NewServer(cfg *ServerConfig) *Server {
 	}
 	s.Client = cl
 	if s.seed {
-		s.SeedVersion()
-		s.SeedPeer()
+		s.seedVersion()
+		s.seedPeer()
 		go func() {
 			peers := s.extractPeers(s.versionTorrent)
 			for p := range s.verifyPeers(peers) {

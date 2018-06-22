@@ -33,7 +33,7 @@ var Commands = []cli.Command{
 	},
 	{
 		Name:    "resolve",
-		Usage:   "Resolve a magnet hash",
+		Usage:   "Resolve a magnet URI",
 		Aliases: []string{"r"},
 		Action:  command.CmdResolve,
 		Flags: []cli.Flag{

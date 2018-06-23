@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
@@ -50,5 +51,5 @@ func VersionTorrentSpec() *torrent.TorrentSpec {
 }
 
 func PeerTorrentSpec(h metainfo.Hash) *torrent.TorrentSpec {
-	return torrentSpecForMessage("detergent.json", CreatePeer(h))
+	return torrentSpecForMessage(fmt.Sprintf("%s.json", h.HexString()), CreatePeer(h))
 }

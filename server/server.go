@@ -29,7 +29,7 @@ const ResolveTimeout = time.Second * 30
 const ResolveWindow = time.Minute * 10
 
 type Server struct {
-	Client         *torrent.Client
+	client         *torrent.Client
 	hashes         []string
 	db             *SqliteDBClient
 	hashLock       sync.Mutex
@@ -74,14 +74,14 @@ func (s *Server) Run() {
 	<-sigs
 	s.db.Close()
 	log.Printf("Exiting Detergent, here are some stats:")
-	s.Client.WriteStatus(os.Stderr)
-	s.Client.Close()
+	s.client.WriteStatus(os.Stderr)
+	s.client.Close()
 }
 
 func (s *Server) ResolveHash(h metainfo.Hash, timeout time.Duration) *metainfo.Info {
-	t, _ := s.Client.Torrent(h)
+	t, _ := s.client.Torrent(h)
 	if t == nil {
-		t, _ = s.Client.AddTorrentInfoHash(h)
+		t, _ = s.client.AddTorrentInfoHash(h)
 	}
 	select {
 	case <-t.GotInfo():
@@ -97,14 +97,14 @@ func (s *Server) DownloadInfoHash(h metainfo.Hash, timeout time.Duration, stor *
 	out := make(chan *torrent.Torrent)
 	go func() {
 		var t *torrent.Torrent
-		if t, _ = s.Client.Torrent(h); t != nil {
+		if t, _ = s.client.Torrent(h); t != nil {
 			close(out)
 			return
 		}
 		if stor != nil {
-			t, _ = s.Client.AddTorrentInfoHashWithStorage(h, *stor)
+			t, _ = s.client.AddTorrentInfoHashWithStorage(h, *stor)
 		} else {
-			t, _ = s.Client.AddTorrentInfoHash(h)
+			t, _ = s.client.AddTorrentInfoHash(h)
 		}
 		log.Printf("Downloading: %s", h)
 		downloaded := make(chan bool)
@@ -149,7 +149,7 @@ func (s *Server) DownloadInfoHash(h metainfo.Hash, timeout time.Duration, stor *
 
 func (s *Server) SeedMessage(name string, m messages.Message) (*torrent.Torrent, error) {
 	ts := torrentSpecForMessage(name, m)
-	t, _, err := s.Client.AddTorrentSpec(ts)
+	t, _, err := s.client.AddTorrentSpec(ts)
 	return t, err
 }
 
@@ -166,7 +166,7 @@ func (s *Server) seedVersion() {
 
 func (s *Server) seedPeer() {
 	if s.peerTorrent == nil {
-		id := s.Client.DHT().ID()
+		id := s.client.DHT().ID()
 		h := metainfo.HashBytes(id[:])
 		n := fmt.Sprintf("%s.json", h.HexString())
 		t, err := s.SeedMessage(n, messages.CreatePeer(h))
@@ -217,7 +217,7 @@ func (s *Server) resolveAndStoreHash(hx string) error {
 	st, err := s.db.GetTorrent(hx)
 	if err == sql.ErrNoRows || st.ResolvedAt.IsZero() {
 		h := metainfo.NewHashFromHex(hx)
-		t, new := s.Client.AddTorrentInfoHashWithStorage(h, make(TorrentBytes, 0))
+		t, new := s.client.AddTorrentInfoHashWithStorage(h, make(TorrentBytes, 0))
 		if new {
 			select {
 			case <-t.GotInfo():
@@ -243,7 +243,7 @@ func (s *Server) resolveAndStoreHash(hx string) error {
 func (s *Server) verifyPeers(in <-chan torrent.Peer) <-chan torrent.Peer {
 	out := make(chan torrent.Peer)
 	go func() {
-		dht := s.Client.DHT()
+		dht := s.client.DHT()
 		for p := range in {
 			ip := fmt.Sprintf("%s:%d", p.IP, p.Port)
 			a, err := net.ResolveUDPAddr("udp", ip)
@@ -301,7 +301,7 @@ func NewServer(cfg *ServerConfig) *Server {
 	}
 	db := NewSqliteDB("./")
 	s := &Server{
-		Client:         nil,
+		client:         nil,
 		hashes:         make([]string, 0),
 		resolveCache:   cache2go.Cache("resolveCache"),
 		listen:         cfg.Listen,
@@ -329,7 +329,7 @@ func NewServer(cfg *ServerConfig) *Server {
 	if err != nil {
 		log.Fatalf("error creating client: %s", err)
 	}
-	s.Client = cl
+	s.client = cl
 	if s.seed {
 		s.seedVersion()
 		s.seedPeer()

@@ -2,7 +2,6 @@ package server
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -15,7 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"git.playgrub.com/toby/det/server/messages"
 	"github.com/anacrolix/dht"
 	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/torrent"
@@ -44,15 +42,6 @@ type Server struct {
 type ServerConfig struct {
 	Listen bool
 	Seed   bool
-}
-
-func torrentSpecForMessage(name string, m messages.Message) *torrent.TorrentSpec {
-	var b TorrentBytes
-	b, err := json.Marshal(m)
-	if err != nil {
-		panic(err)
-	}
-	return b.TorrentSpec(name)
 }
 
 func (s *Server) Run() {
@@ -151,15 +140,14 @@ func (s *Server) DownloadInfoHash(h metainfo.Hash, timeout time.Duration, stor *
 	return out
 }
 
-func (s *Server) SeedMessage(name string, m messages.Message) (*torrent.Torrent, error) {
-	ts := torrentSpecForMessage(name, m)
+func (s *Server) SeedTorrentSpec(ts *torrent.TorrentSpec) (*torrent.Torrent, error) {
 	t, _, err := s.client.AddTorrentSpec(ts)
 	return t, err
 }
 
 func (s *Server) seedVersion() {
 	if s.versionTorrent == nil {
-		t, err := s.SeedMessage("detergent.json", messages.CurrentVersion())
+		t, err := s.SeedTorrentSpec(VersionTorrentSpec())
 		if err != nil {
 			panic(err)
 		}
@@ -173,7 +161,7 @@ func (s *Server) seedPeer() {
 		id := s.client.DHT().ID()
 		h := metainfo.HashBytes(id[:])
 		n := fmt.Sprintf("%s.json", h.HexString())
-		t, err := s.SeedMessage(n, messages.CreatePeer(h))
+		t, err := s.SeedTorrentSpec(PeerTorrentSpec(h))
 		if err != nil {
 			panic(err)
 		}
@@ -258,8 +246,7 @@ func (s *Server) verifyPeers(in <-chan torrent.Peer) <-chan torrent.Peer {
 					if err == nil {
 						h := metainfo.HashBytes(m.R.ID[:])
 						log.Printf("Pong: %s\t%s", h.HexString(), ip)
-						n := fmt.Sprintf("%s.json", h.HexString())
-						ts := torrentSpecForMessage(n, messages.CreatePeer(h))
+						ts := PeerTorrentSpec(h)
 						t := <-s.DownloadInfoHash(ts.InfoHash, time.Second*120, nil)
 						if t != nil {
 							log.Printf("Peer Verified: %s", h.HexString())

@@ -8,22 +8,20 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 )
 
-// Used to satisfy json.Marshaler when seeding
-type DiscoverMessage interface{}
+// Peer discovery protocol version
+const ver = "0.1"
 
-const version = "0.1"
-
-type Version struct {
+type versionMessage struct {
 	Name    string
 	Version string
 }
 
-type Peer struct {
-	Version Version
+type peerMessage struct {
+	Version versionMessage
 	Hash    metainfo.Hash
 }
 
-func torrentSpecForMessage(name string, m DiscoverMessage) *torrent.TorrentSpec {
+func torrentSpecForMessage(name string, m interface{}) *torrent.TorrentSpec {
 	var b TorrentBytes
 	b, err := json.Marshal(m)
 	if err != nil {
@@ -32,24 +30,24 @@ func torrentSpecForMessage(name string, m DiscoverMessage) *torrent.TorrentSpec 
 	return b.TorrentSpec(name)
 }
 
-func CurrentVersion() Version {
-	return Version{
-		Version: version,
+func currentVersion() versionMessage {
+	return versionMessage{
+		Version: ver,
 		Name:    "detergent",
 	}
 }
 
-func CreatePeer(h metainfo.Hash) Peer {
-	return Peer{
-		Version: CurrentVersion(),
+func createPeerMessage(h metainfo.Hash) peerMessage {
+	return peerMessage{
+		Version: currentVersion(),
 		Hash:    h,
 	}
 }
 
 func VersionTorrentSpec() *torrent.TorrentSpec {
-	return torrentSpecForMessage("detergent.json", CurrentVersion())
+	return torrentSpecForMessage("detergent.json", currentVersion())
 }
 
 func PeerTorrentSpec(h metainfo.Hash) *torrent.TorrentSpec {
-	return torrentSpecForMessage(fmt.Sprintf("%s.json", h.HexString()), CreatePeer(h))
+	return torrentSpecForMessage(fmt.Sprintf("%s.json", h.HexString()), createPeerMessage(h))
 }

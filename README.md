@@ -36,11 +36,12 @@ det command [command options] [arguments...]
 COMMANDS:
      listen, l    Build torrent database from network
      search, s    Search resolved torrents
-     resolve, r   Resolve a magnet hash
+     resolve, r   Resolve a magnet URI
      popular, p   List top torrents of all time
      timeline, t  List most popular torrents found each day
      download, d  Download magnet URL
      seed         Seed file on torrent network
+     peer         Respond to queries but don't listen for announces
      info, i      Show Detergent info
      help, h      Shows a list of commands or help for one command
 ```

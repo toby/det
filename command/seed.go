@@ -37,27 +37,21 @@ func CmdSeed(c *cli.Context) error {
 			Seed:   true,
 		}
 		s := server.NewServer(&cfg)
-		defer s.Client.Close()
-		t, err := s.Client.AddTorrent(&mi)
+		t, err := s.AddMetaInfo(&mi)
 		if err != nil {
 			panic(err)
 		}
 		fmt.Printf("Seeding: %s - magnet:?xt=urn:btih:%s\n", p, t.InfoHash().HexString())
 		sigs := make(chan os.Signal, 1)
-		done := make(chan bool, 1)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		go func() {
 			for {
-				select {
-				case <-time.After(time.Second * 10):
-					PrintTorrentStats(t)
-					fmt.Println()
-				case <-sigs:
-					done <- true
-				}
+				PrintTorrentStats(t)
+				fmt.Println()
+				<-time.After(time.Second * 10)
 			}
 		}()
-		<-done
+		<-sigs
 	} else {
 		log.Println("Missing file path")
 	}

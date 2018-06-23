@@ -78,6 +78,10 @@ func (s *Server) Run() {
 	s.client.Close()
 }
 
+func (s *Server) AddMetaInfo(m *metainfo.MetaInfo) (*torrent.Torrent, error) {
+	return s.client.AddTorrent(m)
+}
+
 func (s *Server) ResolveHash(h metainfo.Hash, timeout time.Duration) *metainfo.Info {
 	t, _ := s.client.Torrent(h)
 	if t == nil {

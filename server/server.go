@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -15,7 +14,6 @@ import (
 	"time"
 
 	"github.com/anacrolix/dht"
-	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
@@ -27,16 +25,15 @@ const ResolveTimeout = time.Second * 30
 const ResolveWindow = time.Minute * 10
 
 type Server struct {
-	client         *torrent.Client
-	hashes         []string
-	db             *SqliteDBClient
-	hashLock       sync.Mutex
-	resolveCache   *cache2go.CacheTable
-	listen         bool
-	seed           bool
-	versionTorrent *torrent.Torrent
-	peerTorrent    *torrent.Torrent
-	peers          []torrent.Peer
+	client       *torrent.Client
+	hashes       []string
+	db           *SqliteDBClient
+	hashLock     sync.Mutex
+	resolveCache *cache2go.CacheTable
+	listen       bool
+	seed         bool
+	peers        []torrent.Peer
+	peerEvents   <-chan torrent.Peer
 }
 
 type ServerConfig struct {
@@ -140,34 +137,21 @@ func (s *Server) DownloadInfoHash(h metainfo.Hash, timeout time.Duration, stor *
 	return out
 }
 
-func (s *Server) SeedTorrentSpec(ts *torrent.TorrentSpec) (*torrent.Torrent, error) {
-	t, _, err := s.client.AddTorrentSpec(ts)
-	return t, err
+func (s *Server) PeerId() metainfo.Hash {
+	id := s.client.DHT().ID()
+	return metainfo.HashBytes(id[:])
 }
 
-func (s *Server) seedVersion() {
-	if s.versionTorrent == nil {
-		t, err := s.SeedTorrentSpec(VersionTorrentSpec())
-		if err != nil {
-			panic(err)
-		}
-		s.versionTorrent = t
-		log.Printf("Seeding detergent.json: magnet:?xt=urn:btih:%s\n", s.versionTorrent.InfoHash().HexString())
-	}
+func (s *Server) Namespace() string {
+	return "detergent"
 }
 
-func (s *Server) seedPeer() {
-	if s.peerTorrent == nil {
-		id := s.client.DHT().ID()
-		h := metainfo.HashBytes(id[:])
-		n := fmt.Sprintf("%s.json", h.HexString())
-		t, err := s.SeedTorrentSpec(PeerTorrentSpec(h))
-		if err != nil {
-			panic(err)
-		}
-		s.peerTorrent = t
-		log.Printf("Seeding %s: magnet:?xt=urn:btih:%s\n", n, t.InfoHash().HexString())
-	}
+func (s *Server) AddPeer(p torrent.Peer) {
+	s.peers = append(s.peers, p)
+}
+
+func (s *Server) TorrentClient() *torrent.Client {
+	return s.client
 }
 
 func (s *Server) onAnnouncePeer(h metainfo.Hash, peer dht.Peer) {
@@ -232,57 +216,6 @@ func (s *Server) resolveAndStoreHash(hx string) error {
 	return nil
 }
 
-func (s *Server) verifyPeers(in <-chan torrent.Peer) <-chan torrent.Peer {
-	out := make(chan torrent.Peer)
-	go func() {
-		dht := s.client.DHT()
-		for p := range in {
-			ip := fmt.Sprintf("%s:%d", p.IP, p.Port)
-			a, err := net.ResolveUDPAddr("udp", ip)
-			if err == nil {
-				h := metainfo.HashBytes(p.Id[:]).HexString()
-				log.Printf("Ping: %s\t%s", h, ip)
-				dht.Ping(a, func(m krpc.Msg, err error) {
-					if err == nil {
-						h := metainfo.HashBytes(m.R.ID[:])
-						log.Printf("Pong: %s\t%s", h.HexString(), ip)
-						ts := PeerTorrentSpec(h)
-						t := <-s.DownloadInfoHash(ts.InfoHash, time.Second*120, nil)
-						if t != nil {
-							log.Printf("Peer Verified: %s", h.HexString())
-							t.Drop()
-							out <- p
-						} else {
-							log.Printf("Peer Not Verified: %s", h.HexString())
-						}
-					}
-				})
-			}
-		}
-		close(out)
-	}()
-	return out
-}
-
-func (s *Server) extractPeers(t *torrent.Torrent) <-chan torrent.Peer {
-	out := make(chan torrent.Peer)
-	go func() {
-		seen := make(map[string]torrent.Peer)
-		for {
-			for _, p := range t.KnownSwarm() {
-				h := metainfo.HashBytes(p.Id[:]).HexString()
-				_, ok := seen[h]
-				if !ok {
-					seen[h] = p
-					out <- p
-				}
-			}
-			<-time.After(time.Second * 5)
-		}
-	}()
-	return out
-}
-
 func NewServer(cfg *ServerConfig) *Server {
 	if cfg == nil {
 		cfg = &ServerConfig{
@@ -292,15 +225,14 @@ func NewServer(cfg *ServerConfig) *Server {
 	}
 	db := NewSqliteDB("./")
 	s := &Server{
-		client:         nil,
-		hashes:         make([]string, 0),
-		resolveCache:   cache2go.Cache("resolveCache"),
-		listen:         cfg.Listen,
-		seed:           cfg.Seed,
-		db:             db,
-		versionTorrent: nil,
-		peerTorrent:    nil,
-		peers:          make([]torrent.Peer, 0),
+		client:       nil,
+		hashes:       make([]string, 0),
+		resolveCache: cache2go.Cache("resolveCache"),
+		listen:       cfg.Listen,
+		seed:         cfg.Seed,
+		db:           db,
+		peers:        make([]torrent.Peer, 0),
+		peerEvents:   nil,
 	}
 
 	dcfg := dht.ServerConfig{StartingNodes: dht.GlobalBootstrapAddrs}
@@ -322,14 +254,7 @@ func NewServer(cfg *ServerConfig) *Server {
 	}
 	s.client = cl
 	if s.seed {
-		s.seedVersion()
-		s.seedPeer()
-		go func() {
-			peers := s.extractPeers(s.versionTorrent)
-			for p := range s.verifyPeers(peers) {
-				s.peers = append(s.peers, p)
-			}
-		}()
+		s.peerEvents = StartDiscovery(s, cl)
 	}
 
 	go func() {

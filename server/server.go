@@ -254,7 +254,7 @@ func NewServer(cfg *ServerConfig) *Server {
 	}
 	s.client = cl
 	if s.seed {
-		s.peerEvents = StartDiscovery(s, cl)
+		s.peerEvents = StartDiscovery(s)
 	}
 
 	go func() {

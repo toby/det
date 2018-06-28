@@ -65,7 +65,7 @@ func (m peerMessage) name() string {
 	return fmt.Sprintf("%s.json", m.hash.HexString())
 }
 
-func StartDiscovery(d DiscoveryPeer, c *torrent.Client) <-chan torrent.Peer {
+func StartDiscovery(d DiscoveryPeer) <-chan torrent.Peer {
 	n := namespace(d.Namespace())
 	ps := make(chan torrent.Peer)
 	nm := namespaceMessage{

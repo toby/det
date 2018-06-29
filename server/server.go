@@ -124,7 +124,7 @@ func (s *Server) Run() {
 		}
 	}()
 	<-sigs
-	s.db.Close()
+	_ = s.db.Close()
 	log.Printf("Exiting Detergent, here are some stats:")
 	s.client.WriteStatus(os.Stderr)
 	s.client.Close()
@@ -276,8 +276,14 @@ func (s *Server) resolveAndStoreHash(hx string) error {
 		if new {
 			select {
 			case <-t.GotInfo():
-				s.db.CreateTorrentSearch(t.InfoHash().HexString(), t.Name())
-				s.db.SetTorrentMeta(t.InfoHash().HexString(), t.Name())
+				err = s.db.CreateTorrentSearch(t.InfoHash().HexString(), t.Name())
+				if err != nil {
+					return err
+				}
+				err = s.db.SetTorrentMeta(t.InfoHash().HexString(), t.Name())
+				if err != nil {
+					return err
+				}
 				log.Printf("Resolved:\t%s\t%s", t.InfoHash().HexString(), t.Name())
 			case <-time.After(resolveTimeout):
 				log.Printf("Timeout:\t%s", h)

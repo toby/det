@@ -8,6 +8,8 @@ import (
 )
 
 var (
+	// BuiltinAnnounceList are the default trackers when creating a torrent
+	// MetaInfo.
 	BuiltinAnnounceList = [][]string{
 		{"udp://tracker.openbittorrent.com:80"},
 		{"udp://tracker.publicbt.com:80"},

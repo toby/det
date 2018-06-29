@@ -113,32 +113,37 @@ func StartDiscovery(d DiscoveryPeer) <-chan torrent.Peer {
 	return ps
 }
 
+func verifyPeer(d DiscoveryPeer, p torrent.Peer, out chan<- torrent.Peer) {
+	dht := d.TorrentClient().DHT()
+	n := namespace(d.Namespace())
+	ip := fmt.Sprintf("%s:%d", p.IP, p.Port)
+	a, err := net.ResolveUDPAddr("udp", ip)
+	if err != nil {
+		return
+	}
+	log.Printf("Ping: %s", ip)
+	_ = dht.Ping(a, func(m krpc.Msg, err error) {
+		if err == nil {
+			h := metainfo.HashBytes(m.R.ID[:])
+			log.Printf("Pong: %s\t%s", h.HexString(), ip)
+			ts := torrentSpecForMessage(peerMessage{namespace: n, hash: h})
+			t := <-d.DownloadInfoHash(ts.InfoHash, time.Second*120, nil)
+			if t != nil {
+				log.Printf("Peer Verified: %s\t%s", h.HexString(), ip)
+				out <- p
+				t.Drop()
+			} else {
+				log.Printf("Peer Not Verified: %s\t%s", h.HexString(), ip)
+			}
+		}
+	})
+}
+
 func verifyPeers(d DiscoveryPeer, in <-chan torrent.Peer) <-chan torrent.Peer {
 	out := make(chan torrent.Peer)
 	go func() {
-		dht := d.TorrentClient().DHT()
-		n := namespace(d.Namespace())
 		for p := range in {
-			ip := fmt.Sprintf("%s:%d", p.IP, p.Port)
-			a, err := net.ResolveUDPAddr("udp", ip)
-			if err == nil {
-				log.Printf("Ping: %s", ip)
-				dht.Ping(a, func(m krpc.Msg, err error) {
-					if err == nil {
-						h := metainfo.HashBytes(m.R.ID[:])
-						log.Printf("Pong: %s\t%s", h.HexString(), ip)
-						ts := torrentSpecForMessage(peerMessage{namespace: n, hash: h})
-						t := <-d.DownloadInfoHash(ts.InfoHash, time.Second*120, nil)
-						if t != nil {
-							log.Printf("Peer Verified: %s\t%s", h.HexString(), ip)
-							out <- p
-							t.Drop()
-						} else {
-							log.Printf("Peer Not Verified: %s\t%s", h.HexString(), ip)
-						}
-					}
-				})
-			}
+			verifyPeer(d, p, out)
 		}
 		close(out)
 	}()

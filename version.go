@@ -1,4 +1,4 @@
 package main
 
-const Name string = "det"
-const Version string = "0.1.0"
+const name string = "det"
+const version string = "0.2.0"

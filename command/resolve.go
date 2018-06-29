@@ -9,6 +9,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+// CmdResolve resolves the metadata for a magnet uri supplied as a command line
+// argument.
 func CmdResolve(c *cli.Context) error {
 	if c.NArg() > 0 {
 		a := c.Args().Get(0)
@@ -16,7 +18,7 @@ func CmdResolve(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		cfg := server.ServerConfig{
+		cfg := server.Config{
 			Listen: false,
 			Seed:   false,
 		}

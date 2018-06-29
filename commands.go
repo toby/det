@@ -8,9 +8,9 @@ import (
 	"github.com/urfave/cli"
 )
 
-var GlobalFlags = []cli.Flag{}
+var globalFlags = []cli.Flag{}
 
-var Commands = []cli.Command{
+var commands = []cli.Command{
 	{
 		Name:    "listen",
 		Usage:   "Build torrent database from network",
@@ -102,7 +102,10 @@ var Commands = []cli.Command{
 	},
 }
 
-func CommandNotFound(c *cli.Context, command string) {
-	fmt.Fprintf(os.Stderr, "%s: '%s' is not a %s command. See '%s --help'.\n", c.App.Name, command, c.App.Name, c.App.Name)
+func commandNotFound(c *cli.Context, command string) {
+	_, err := fmt.Fprintf(os.Stderr, "%s: '%s' is not a %s command. See '%s --help'.\n", c.App.Name, command, c.App.Name, c.App.Name)
+	if err != nil {
+		panic(err)
+	}
 	os.Exit(2)
 }

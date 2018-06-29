@@ -8,6 +8,7 @@ import (
 	"golang.org/x/text/message"
 )
 
+// CmdInfo prints statistics about the det database.
 func CmdInfo(c *cli.Context) error {
 	var db *server.SqliteDBClient
 	db = server.NewSqliteDB("./")

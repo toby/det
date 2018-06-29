@@ -5,8 +5,9 @@ import (
 	"github.com/urfave/cli"
 )
 
+// CmdListen builds a database of resolved announce hashes.
 func CmdListen(c *cli.Context) error {
-	cfg := server.ServerConfig{
+	cfg := server.Config{
 		Listen: true,
 		Seed:   true,
 	}

@@ -9,6 +9,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+// CmdDownload downloads a torrent from a magnet uri parsed from the command
+// line arguments.
 func CmdDownload(c *cli.Context) error {
 	if c.NArg() > 0 {
 		a := c.Args().Get(0)
@@ -16,7 +18,7 @@ func CmdDownload(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		cfg := server.ServerConfig{
+		cfg := server.Config{
 			Listen: false,
 			Seed:   false,
 		}

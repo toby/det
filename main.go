@@ -14,15 +14,17 @@ func main() {
 	}
 
 	app := cli.NewApp()
-	app.Name = Name
-	app.Version = Version
+	app.Name = name
+	app.Version = version
 	app.Author = "toby"
-	app.Email = ""
-	app.Usage = ""
+	app.Email = "toby@deter.gent"
 
-	app.Flags = GlobalFlags
-	app.Commands = Commands
-	app.CommandNotFound = CommandNotFound
+	app.Flags = globalFlags
+	app.Commands = commands
+	app.CommandNotFound = commandNotFound
 
-	app.Run(os.Args)
+	err := app.Run(os.Args)
+	if err != nil {
+		panic(err)
+	}
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/anacrolix/torrent"
 )
 
-func PrintRankedTorrent(t server.Torrent) {
+func printRankedTorrent(t server.Torrent) {
 	name := t.Name
 	if name == "" {
 		name = "-- unresolved --"
@@ -16,7 +16,7 @@ func PrintRankedTorrent(t server.Torrent) {
 	fmt.Printf("%-9d %-80s magnet:?xt=urn:btih:%-40s\n", t.AnnounceCount, name, t.InfoHash)
 }
 
-func PrintTorrentStats(t *torrent.Torrent) {
+func printTorrentStats(t *torrent.Torrent) {
 	fmt.Printf("Seeding:           %t\n", t.Seeding())
 	fmt.Printf("Total Peers:       %d\n", t.Stats().TotalPeers)
 	fmt.Printf("Pending Peers:     %d\n", t.Stats().PendingPeers)
@@ -25,7 +25,7 @@ func PrintTorrentStats(t *torrent.Torrent) {
 	fmt.Printf("Half Open Peers:   %d\n", t.Stats().HalfOpenPeers)
 }
 
-func Underline(s string) string {
+func underline(s string) string {
 	r := regexp.MustCompile(".")
 	u := r.ReplaceAllString(s, "-")
 	return fmt.Sprintf("%s\n%s", s, u)

@@ -7,6 +7,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+// CmdPopular displays the most popular torrents in the det db based on number
+// of announces.
 func CmdPopular(c *cli.Context) error {
 	var db *server.SqliteDBClient
 	db = server.NewSqliteDB("./")
@@ -18,7 +20,7 @@ func CmdPopular(c *cli.Context) error {
 		return err
 	}
 	for _, t := range ts {
-		PrintRankedTorrent(t)
+		printRankedTorrent(t)
 	}
 	return nil
 }

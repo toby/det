@@ -8,6 +8,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+// CmdSearch searches for torrents that match the term supplied on the command
+// line.
 func CmdSearch(c *cli.Context) error {
 	var db *server.SqliteDBClient
 	db = server.NewSqliteDB("./")
@@ -28,7 +30,7 @@ func CmdSearch(c *cli.Context) error {
 		return err
 	}
 	for _, t := range rows {
-		PrintRankedTorrent(t)
+		printRankedTorrent(t)
 	}
 	return nil
 }

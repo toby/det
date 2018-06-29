@@ -14,6 +14,7 @@ import (
 	"github.com/urfave/cli"
 )
 
+// CmdSeed seeds the file provided as a command line argument.
 func CmdSeed(c *cli.Context) error {
 	if c.NArg() > 0 {
 		p := c.Args().Get(0)
@@ -32,7 +33,7 @@ func CmdSeed(c *cli.Context) error {
 		if err != nil {
 			panic(err)
 		}
-		cfg := server.ServerConfig{
+		cfg := server.Config{
 			Listen: false,
 			Seed:   true,
 		}
@@ -46,7 +47,7 @@ func CmdSeed(c *cli.Context) error {
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		go func() {
 			for {
-				PrintTorrentStats(t)
+				printTorrentStats(t)
 				fmt.Println()
 				<-time.After(time.Second * 10)
 			}

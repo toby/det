@@ -15,17 +15,33 @@ import (
 
 const discoverVersion = "0.2"
 
+// Discoverable is an interface peers must implement to work with the discover
+// protocol.
 type Discoverable interface {
+	// Namespace is a unique string for this application. When seeded, the
+	// discoverVersion will be appended.
 	Namespace() string
-	PeerId() metainfo.Hash
+
+	// PeerId returns a metainfo.Hash unique to this peer.
+	PeerID() metainfo.Hash
+
+	// AddPeer will be called with a torrent.Peer as they are discovered.
 	AddPeer(torrent.Peer)
 }
 
+// TorrentPeer is an interface to functionality in the `anacrolix/torrent` library.
 type TorrentPeer interface {
+	// TorrentClient returns the client for lower level torrent operations.
 	TorrentClient() *torrent.Client
+
+	// DownloadInfoHash will return a channel that closes after the
+	// specified timeout or returns a *torrent.Torrent if it was able to
+	// fully download. A timeout of zero will block until the torrent is
+	// downloaded.
 	DownloadInfoHash(metainfo.Hash, time.Duration, *storage.ClientImpl) <-chan *torrent.Torrent
 }
 
+// DiscoveryPeer is a composite type to combine Discoverable and TorrentPeer.
 type DiscoveryPeer interface {
 	Discoverable
 	TorrentPeer
@@ -38,6 +54,7 @@ type discoverMessage interface {
 
 type messageData struct{}
 
+// data marshals the receiver into json and returns the []byte representation.
 func (m messageData) data() []byte {
 	b, err := json.Marshal(m)
 	if err != nil {
@@ -46,6 +63,8 @@ func (m messageData) data() []byte {
 	return b
 }
 
+// namepsaceMessage is the semaphore message used to signify participation in
+// the discovery protocol.
 type namespaceMessage struct {
 	messageData
 	namespace string
@@ -55,6 +74,10 @@ func (m namespaceMessage) name() string {
 	return fmt.Sprintf("%s.json", m.namespace)
 }
 
+// peerMessage represents unique peers in the namespace. Seeding this message
+// allows the validation of peers when this message is deterministically
+// constructed by a remote peer using the peer id discovered in the swarm of
+// the namespaceMessage.
 type peerMessage struct {
 	messageData
 	namespace string
@@ -65,6 +88,9 @@ func (m peerMessage) name() string {
 	return fmt.Sprintf("%s.json", m.hash.HexString())
 }
 
+// StartDiscovery begins and coordinates the discovery protocol. It returns a
+// channel of verified peers. AddPeer will also be called on d as they are
+// discovered.
 func StartDiscovery(d DiscoveryPeer) <-chan torrent.Peer {
 	n := namespace(d.Namespace())
 	ps := make(chan torrent.Peer)
@@ -74,7 +100,7 @@ func StartDiscovery(d DiscoveryPeer) <-chan torrent.Peer {
 	t := seedNamespace(d.TorrentClient(), nm)
 	pm := peerMessage{
 		namespace: n,
-		hash:      d.PeerId(),
+		hash:      d.PeerID(),
 	}
 	seedPeer(d.TorrentClient(), pm)
 	go func() {
@@ -142,11 +168,6 @@ func torrentSpecForMessage(m discoverMessage) *torrent.TorrentSpec {
 	var b TorrentBytes
 	b = m.data()
 	return b.TorrentSpec(m.name())
-}
-
-func seedTorrentSpec(cl *torrent.Client, ts *torrent.TorrentSpec) (*torrent.Torrent, error) {
-	t, _, err := cl.AddTorrentSpec(ts)
-	return t, err
 }
 
 func seedMessage(cl *torrent.Client, m discoverMessage) *torrent.Torrent {

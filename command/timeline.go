@@ -8,6 +8,7 @@ import (
 	"github.com/urfave/cli"
 )
 
+// CmdTimeline shows the top torrents discovered by day.
 func CmdTimeline(c *cli.Context) error {
 	var db *server.SqliteDBClient
 	db = server.NewSqliteDB("./")
@@ -21,9 +22,9 @@ func CmdTimeline(c *cli.Context) error {
 	}
 	for _, entry := range tl {
 		if len(entry.Torrents) > 0 {
-			fmt.Printf("%s\n", Underline(entry.Day.Format("Mon Jan _2")))
+			fmt.Printf("%s\n", underline(entry.Day.Format("Mon Jan _2")))
 			for _, t := range entry.Torrents {
-				PrintRankedTorrent(t)
+				printRankedTorrent(t)
 			}
 			println()
 		}

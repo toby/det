@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gchaincl/dotsql"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var dot, _ = dotsql.LoadFromFile("server/sql/db.sql")

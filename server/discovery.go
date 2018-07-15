@@ -97,12 +97,12 @@ func StartDiscovery(d DiscoveryPeer) <-chan torrent.Peer {
 	nm := namespaceMessage{
 		namespace: n,
 	}
-	t := seedNamespace(d.TorrentClient(), nm)
+	t := seedMessage(d.TorrentClient(), nm)
 	pm := peerMessage{
 		namespace: n,
 		hash:      d.PeerID(),
 	}
-	seedPeer(d.TorrentClient(), pm)
+	seedMessage(d.TorrentClient(), pm)
 	go func() {
 		peers := extractPeers(t)
 		for p := range verifyPeers(d, peers) {
@@ -187,12 +187,4 @@ func seedMessage(cl *torrent.Client, m discoverMessage) *torrent.Torrent {
 
 func namespace(n string) string {
 	return fmt.Sprintf("%s-%s", n, discoverVersion)
-}
-
-func seedNamespace(cl *torrent.Client, m namespaceMessage) *torrent.Torrent {
-	return seedMessage(cl, m)
-}
-
-func seedPeer(cl *torrent.Client, m peerMessage) *torrent.Torrent {
-	return seedMessage(cl, m)
 }

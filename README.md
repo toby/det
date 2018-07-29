@@ -1,34 +1,24 @@
-# detergent
+# Detergent
 
-Distributed torrents.
+Detergent is a distributed protocol for searching and indexing the BitTorrent
+network. It uses the `det` command line app to query information stored from
+the Torrent DHT (magnet links).
 
 ## Install
 
-The `anacrolix/torrent` and `anacrolix/dht` libs have recently changed
-interface and break compatibility with `det`. Please use the following
-installation procedure as a temporary fix.
+Building requires `go` with module support (`go1.11beta2` at the time of this
+writing).
 
-```bash
-go get git.playgrub.com/toby/det
-
-cd $GOPATH/src/github.com/anacrolix/dht
-git remote add det https://git.playgrub.com/toby/dht.git
-git fetch det
-git checkout det
-
-cd $GOPATH/src/github.com/anacrolix/torrent
-git remote add det https://git.playgrub.com/toby/torrent.git
-git fetch det
-git checkout det
-
-cd $GOPATH/src/git.playgrub.com/toby/det
-go clean; go build
+```
+git clone https://git.playgrub.com/toby/det.git
+cd det
+go1.11beta2 build
 ```
 
 ## Usage
 
-Detergent uses a cli called `det`. The longer you run this command in
-`listen` mode, the better off you will be.
+To start you'll need to build up a database of Torrent metainfo by running
+`det listen`. You can run other commands while det is listening.
 
 ```
 det command [command options] [arguments...]

@@ -1,5 +1,6 @@
 detergent
 det
+go.sum
 *.test
 sqlite.db
 .torrent.bolt.db

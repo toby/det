@@ -16,18 +16,18 @@ import (
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
-	"github.com/mattn/go-sqlite3"
 	"github.com/muesli/cache2go"
 )
 
 const resolveTimeout = time.Second * 30
 const resolveWindow = time.Minute * 10
+const resolverRoutines = 10
 
 // Server is a det peer that contains torrent, dht and det specifc
 // functionality.
 type Server struct {
 	client       *torrent.Client
-	hashes       []string
+	hashes       chan string
 	db           *SqliteDBClient
 	hashLock     sync.Mutex
 	resolveCache *cache2go.CacheTable
@@ -57,7 +57,7 @@ func NewServer(cfg *Config) *Server {
 	db := NewSqliteDB("./")
 	s := &Server{
 		client:       nil,
-		hashes:       make([]string, 0),
+		hashes:       make(chan string, 500),
 		resolveCache: cache2go.Cache("resolveCache"),
 		listen:       cfg.Listen,
 		seed:         cfg.Seed,
@@ -84,9 +84,9 @@ func NewServer(cfg *Config) *Server {
 		log.Fatalf("error creating client: %s", err)
 	}
 	s.client = cl
-	if s.seed {
-		s.peerEvents = StartDiscovery(s)
-	}
+	// if s.seed {
+	// 	s.peerEvents = StartDiscovery(s)
+	// }
 
 	go func() {
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -110,23 +110,21 @@ func NewServer(cfg *Config) *Server {
 func (s *Server) Run() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		for {
-			if len(s.hashes) > 0 {
-				err := s.resolveAndStoreHash(s.hashes[0])
+	for i := 0; i <= resolverRoutines; i++ {
+		go func() {
+			for {
+				h := <-s.hashes
+				err := s.resolveAndStoreHash(h)
 				if err != nil {
 					log.Println(err)
 				}
-				s.hashes = s.hashes[1:]
-			} else {
-				<-time.After(time.Second)
 			}
-		}
-	}()
+		}()
+	}
 	<-sigs
 	_ = s.db.Close()
-	log.Printf("Exiting Detergent, here are some stats:")
-	s.client.WriteStatus(os.Stderr)
+	// log.Printf("Exiting Detergent, here are some stats:")
+	// s.client.WriteStatus(os.Stderr)
 	s.client.Close()
 }
 
@@ -244,28 +242,18 @@ func (s *Server) onAnnouncePeer(h metainfo.Hash, peer dht.Peer) {
 	if err := s.db.CreateAnnounce(hx, peer.String()); err != nil {
 		log.Printf("CreateAnnounce Error:\t%s", err)
 	}
+	// have we tried to resolve this in the last 10 mins?
+	if !s.resolveCache.Exists(h) {
+		s.resolveCache.Add(h, resolveWindow, true)
+		s.hashes <- hx
+	}
 }
 
-func (s *Server) addHash(h string) error {
-	if len(h) != 40 {
+func (s *Server) addHash(hx string) error {
+	if len(hx) != 40 {
 		return errors.New("Invalid hash length")
 	}
-
-	err := s.db.CreateTorrent(h)
-	if err != nil {
-		// duplicate hash
-		if err.(sqlite3.Error).Code != 19 {
-			return err
-		}
-		// have we tried to resolve this in the last 10 mins?
-		if s.resolveCache.Exists(h) {
-			return nil
-		}
-	}
-
-	s.resolveCache.Add(h, resolveWindow, true)
-	s.hashes = append(s.hashes, h)
-	return nil
+	return s.db.CreateTorrent(hx)
 }
 
 func (s *Server) resolveAndStoreHash(hx string) error {
@@ -286,7 +274,7 @@ func (s *Server) resolveAndStoreHash(hx string) error {
 				}
 				log.Printf("Resolved:\t%s\t%s", t.InfoHash().HexString(), t.Name())
 			case <-time.After(resolveTimeout):
-				log.Printf("Timeout:\t%s", h)
+				// log.Printf("Timeout:\t%s", h)
 			}
 		} else {
 			log.Printf("Resolved Found:\t%s", t)

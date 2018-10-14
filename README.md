@@ -6,13 +6,12 @@ the Torrent DHT (magnet links).
 
 ## Install
 
-Building requires `go` with module support (`go1.11beta2` at the time of this
-writing).
+Building requires `go` 1.11+
 
 ```
 git clone https://git.playgrub.com/toby/det.git
 cd det
-go1.11beta2 build
+go build
 ```
 
 ## Usage

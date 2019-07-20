@@ -2,9 +2,11 @@ package server
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anacrolix/dht"
+	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
@@ -66,20 +68,15 @@ func NewServer(cfg *Config) *Server {
 		peerEvents:   nil,
 	}
 
-	dcfg := dht.ServerConfig{StartingNodes: dht.GlobalBootstrapAddrs}
+	torrentCfg := torrent.NewDefaultClientConfig()
+	torrentCfg.Seed = cfg.Seed
+	torrentCfg.DefaultStorage = storage.NewBoltDB("./")
 	if s.listen {
-		dcfg.OnAnnouncePeer = s.onAnnouncePeer
+		torrentCfg.DHTOnQuery = s.onQuery
 	}
-	torrentCfg := torrent.Config{
-		DHTConfig:      dcfg,
-		Seed:           cfg.Seed,
-		DefaultStorage: storage.NewBoltDB("./"),
-	}
-	cl, err := torrent.NewClient(&torrentCfg)
+	cl, err := torrent.NewClient(torrentCfg)
 	id := cl.PeerID()
 	log.Printf("Torrent Peer ID: %s", metainfo.HashBytes(id[:]).HexString())
-	id = cl.DHT().ID()
-	log.Printf("DHT Node ID: %s", metainfo.HashBytes(id[:]).HexString())
 	if err != nil {
 		log.Fatalf("error creating client: %s", err)
 	}
@@ -94,9 +91,6 @@ func NewServer(cfg *Config) *Server {
 		})
 		http.HandleFunc("/torrent", func(w http.ResponseWriter, r *http.Request) {
 			cl.WriteStatus(w)
-		})
-		http.HandleFunc("/dht", func(w http.ResponseWriter, r *http.Request) {
-			cl.DHT().WriteStatus(w)
 		})
 		if s.listen {
 			log.Println("Web stats listening on: http://0.0.0.0:8888")
@@ -180,7 +174,7 @@ func (s *Server) DownloadInfoHash(h metainfo.Hash, timeout time.Duration, stor *
 					return
 				}
 				br := t.Stats().ConnStats.BytesReadUsefulData
-				p := 100 * float64(br) / float64(t.Length())
+				p := 100 * float64(br.Int64()) / float64(t.Length())
 				select {
 				case <-time.After(time.Second * 10):
 					log.Printf("Downloaded: %.2f%% - %d of %d bytes", p, br, t.Length())
@@ -210,7 +204,7 @@ func (s *Server) DownloadInfoHash(h metainfo.Hash, timeout time.Duration, stor *
 
 // PeerID returns the unique id for this peer. It satisfies the Discoverable interface.
 func (s *Server) PeerID() metainfo.Hash {
-	id := s.client.DHT().ID()
+	id := s.client.DhtServers()[0].ID()
 	return metainfo.HashBytes(id[:])
 }
 
@@ -231,22 +225,26 @@ func (s *Server) TorrentClient() *torrent.Client {
 	return s.client
 }
 
-func (s *Server) onAnnouncePeer(h metainfo.Hash, peer dht.Peer) {
-	s.hashLock.Lock()
-	defer s.hashLock.Unlock()
-	hx := h.HexString()
-	if err := s.addHash(hx); err != nil {
-		log.Printf("Error adding hash: %s", err)
-		return
+func (s *Server) onQuery(query *krpc.Msg, source net.Addr) bool {
+	if query.Q == "announce_peer" {
+		s.hashLock.Lock()
+		defer s.hashLock.Unlock()
+		hx := hex.EncodeToString(query.A.InfoHash[:])
+		p := hex.EncodeToString(query.A.ID[:])
+		if err := s.addHash(hx); err != nil {
+			log.Printf("Error adding hash: %s", err)
+			return true
+		}
+		if err := s.db.CreateAnnounce(hx, p); err != nil {
+			log.Printf("CreateAnnounce Error:\t%s", err)
+		}
+		// have we tried to resolve this in the last 10 mins?
+		if !s.resolveCache.Exists(hx) {
+			s.resolveCache.Add(hx, resolveWindow, true)
+			s.hashes <- hx
+		}
 	}
-	if err := s.db.CreateAnnounce(hx, peer.String()); err != nil {
-		log.Printf("CreateAnnounce Error:\t%s", err)
-	}
-	// have we tried to resolve this in the last 10 mins?
-	if !s.resolveCache.Exists(h) {
-		s.resolveCache.Add(h, resolveWindow, true)
-		s.hashes <- hx
-	}
+	return true
 }
 
 func (s *Server) addHash(hx string) error {

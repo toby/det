@@ -114,7 +114,7 @@ func StartDiscovery(d DiscoveryPeer) <-chan torrent.Peer {
 }
 
 func verifyPeer(d DiscoveryPeer, p torrent.Peer, out chan<- torrent.Peer) {
-	dht := d.TorrentClient().DHT()
+	dht := d.TorrentClient().DhtServers()[0]
 	n := namespace(d.Namespace())
 	ip := fmt.Sprintf("%s:%d", p.IP, p.Port)
 	a, err := net.ResolveUDPAddr("udp", ip)

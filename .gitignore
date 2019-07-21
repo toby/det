@@ -1,5 +1,4 @@
-detergent
-det
+cmd/det/det
 go.sum
 *.test
 sqlite.db

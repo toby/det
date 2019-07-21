@@ -53,7 +53,7 @@ func serverConfigFromDefaults() *server.Config {
 func initConfig() {
 	viper.SetConfigName("config")
 	viper.AddConfigPath("/etc/det/")
-	viper.AddConfigPath("$HOME/.appname")
+	viper.AddConfigPath("$HOME/.det")
 	viper.AddConfigPath(".")
 	viper.SetEnvPrefix("det")
 	viper.AutomaticEnv()

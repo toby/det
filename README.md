@@ -100,7 +100,7 @@ pipe into other commands.
 Some Detergent functionality requires the ability to seed files and arbitrary
 byte slices. This is currently supported from the CLI and in the code. The
 `torrent/storage` interface from [anacrolix/torrent](https://github.com/anacrolix/torrent)
-is implemented for read-only `[]byte` slices in [bytes.go](https://git.playgrub.com/toby/det/blob/master/server/bytes.go).
+is implemented for read-only `[]byte` slices in [bytes.go](https://github.com/toby/det/blob/master/bytes.go).
 
 ### Download Torrents
 
@@ -132,7 +132,7 @@ top level filename is indexed. Soon all files in the Torrent should be indexed.
 ### Show popular and trending Torrents
 
 Both `det popular` and `det timeline` provide *very* basic trending analysis.
-The queries themselves are in [db.sql](https://git.playgrub.com/toby/det/blob/master/server/sql/db.sql).
+The queries themselves are in [db.sql](https://github.com/toby/det/blob/master/sql/db.sql).
 
 ### Detergent peer discovery
 
@@ -146,7 +146,7 @@ and trending. The process for peer discovery works roughly like this:
 4. `PEER_ID.json` files are constructed and seeded for each potential Detergent peer sharing `detergent.json`.
 5. Any `PEER_ID.json` file that can be downloaded should represent a peer that implements the Detergent protocol.
 
-Further details are available in [discovery.go](https://git.playgrub.com/toby/det/blob/master/server/discovery.go).
+Further details are available in [discovery.go](https://github.com/toby/det/blob/master/discovery.go).
 
 ### Distributed searching
 
@@ -188,7 +188,7 @@ to publish Markdown based posts.
 
 In addition to trending and search, Detergent should allow users to curate,
 organize and promote content. Using techniques based on
-[key.run](https://git.playgrub.com/toby/keyrun), infohashes can be organized
+[key.run](https://github.com/toby/keyrun), infohashes can be organized
 into many namespaces and sorted by cryptocurrency transaction amounts. By
 leveraging blockchain based namespacing and encoding, there's an opportunity to
 build up durable indexes of infohashes that are manually curated.

@@ -1,4 +1,4 @@
-package server
+package det
 
 import (
 	"database/sql"
@@ -10,10 +10,9 @@ import (
 	"github.com/gchaincl/dotsql"
 )
 
-var dot, _ = dotsql.LoadFromFile("server/sql/db.sql")
-
 type SqliteDBClient struct {
-	db *sql.DB
+	db  *sql.DB
+	sql *dotsql.DotSql
 }
 
 type Torrent struct {
@@ -66,27 +65,35 @@ func scanTorrent(scan func(...interface{}) error) (Torrent, error) {
 	return t, nil
 }
 
-func NewSqliteDB(filePath string) *SqliteDBClient {
+func NewSqliteDB(filePath string) (*SqliteDBClient, error) {
 	log.Printf("Using SQLite DB: %ssqlite.db", filePath)
-	ret := &SqliteDBClient{}
-	var err error
+	dot, err := dotsql.LoadFromFile("sql/db.sql")
+	if err != nil {
+		return nil, err
+	}
+	ret := &SqliteDBClient{
+		sql: dot,
+	}
 	ret.db, err = sql.Open("sqlite3", filepath.Join(filePath, "sqlite.db"))
+	if err != nil {
+		return nil, err
+	}
 	_, err = dot.Exec(ret.db, "create-torrent-table")
 	if err != nil {
 		ret.db.Close()
-		panic(err)
+		return nil, err
 	}
 	_, err = dot.Exec(ret.db, "create-search-table")
 	if err != nil {
 		ret.db.Close()
-		panic(err)
+		return nil, err
 	}
 	_, err = dot.Exec(ret.db, "create-announce-table")
 	if err != nil {
 		ret.db.Close()
-		panic(err)
+		return nil, err
 	}
-	return ret
+	return ret, nil
 }
 
 func (me *SqliteDBClient) Close() error {
@@ -96,7 +103,7 @@ func (me *SqliteDBClient) Close() error {
 func (me *SqliteDBClient) Stats() (stats Stats, err error) {
 	var torrents, announces, resolved int64
 	stats = Stats{torrents, announces, resolved}
-	row, err := dot.QueryRow(me.db, "total-torrents")
+	row, err := me.sql.QueryRow(me.db, "total-torrents")
 	if err != nil {
 		return
 	}
@@ -104,7 +111,7 @@ func (me *SqliteDBClient) Stats() (stats Stats, err error) {
 	if err != nil {
 		return
 	}
-	row, err = dot.QueryRow(me.db, "total-announces")
+	row, err = me.sql.QueryRow(me.db, "total-announces")
 	if err != nil {
 		return
 	}
@@ -112,7 +119,7 @@ func (me *SqliteDBClient) Stats() (stats Stats, err error) {
 	if err != nil {
 		return
 	}
-	row, err = dot.QueryRow(me.db, "total-resolved")
+	row, err = me.sql.QueryRow(me.db, "total-resolved")
 	if err != nil {
 		return
 	}
@@ -121,12 +128,12 @@ func (me *SqliteDBClient) Stats() (stats Stats, err error) {
 }
 
 func (me *SqliteDBClient) CreateTorrent(hash string) error {
-	_, err := dot.Exec(me.db, "create-torrent", hash)
+	_, err := me.sql.Exec(me.db, "create-torrent", hash)
 	return err
 }
 
 func (me *SqliteDBClient) GetTorrent(hash string) (Torrent, error) {
-	row, err := dot.QueryRow(me.db, "get-torrent", hash)
+	row, err := me.sql.QueryRow(me.db, "get-torrent", hash)
 	if err != nil {
 		return Torrent{}, err
 	}
@@ -141,7 +148,7 @@ func (me *SqliteDBClient) GetTorrent(hash string) (Torrent, error) {
 
 func (me *SqliteDBClient) PopularTorrents(limit int) ([]Torrent, error) {
 	ret := make([]Torrent, 0)
-	rows, err := dot.Query(me.db, "popular-torrents", limit)
+	rows, err := me.sql.Query(me.db, "popular-torrents", limit)
 	if err != nil {
 		return ret, err
 	}
@@ -164,7 +171,7 @@ func (me *SqliteDBClient) TimelineTorrents(days int, limit int) ([]TimelineEntry
 	df := "-%d days"
 	for i := 0; i <= days; i++ {
 		ts := make([]Torrent, 0)
-		rows, err := dot.Query(me.db, "popular-torrents-day", fmt.Sprintf(df, i), fmt.Sprintf(df, i+1), limit)
+		rows, err := me.sql.Query(me.db, "popular-torrents-day", fmt.Sprintf(df, i), fmt.Sprintf(df, i+1), limit)
 		if err != nil {
 			return ret, err
 		}
@@ -186,7 +193,7 @@ func (me *SqliteDBClient) TimelineTorrents(days int, limit int) ([]TimelineEntry
 
 func (me *SqliteDBClient) SearchTorrents(term string, limit int) ([]Torrent, error) {
 	ret := make([]Torrent, 0)
-	rows, err := dot.Query(me.db, "search-torrents", term, limit)
+	rows, err := me.sql.Query(me.db, "search-torrents", term, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -204,16 +211,16 @@ func (me *SqliteDBClient) SearchTorrents(term string, limit int) ([]Torrent, err
 }
 
 func (me *SqliteDBClient) CreateAnnounce(hash string, peerId string) error {
-	_, err := dot.Exec(me.db, "create-announce", hash, peerId)
+	_, err := me.sql.Exec(me.db, "create-announce", hash, peerId)
 	if err != nil {
 		return err
 	}
-	_, err = dot.Exec(me.db, "update-announce-count", hash)
+	_, err = me.sql.Exec(me.db, "update-announce-count", hash)
 	return err
 }
 
 func (me *SqliteDBClient) SetTorrentMeta(hash string, name string) error {
-	_, err := dot.Exec(me.db, "set-torrent-meta", name, hash)
+	_, err := me.sql.Exec(me.db, "set-torrent-meta", name, hash)
 	return err
 }
 
@@ -223,7 +230,7 @@ func (me *SqliteDBClient) CreateTorrentSearch(hash string, name string) error {
 		return err
 	}
 	if t.Name == "" {
-		_, err = dot.Exec(me.db, "create-torrent-search", hash, name)
+		_, err = me.sql.Exec(me.db, "create-torrent-search", hash, name)
 		return err
 	}
 	return nil

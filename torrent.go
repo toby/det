@@ -1,4 +1,4 @@
-package server
+package det
 
 import (
 	"github.com/anacrolix/torrent"

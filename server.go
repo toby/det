@@ -1,4 +1,4 @@
-package server
+package det
 
 import (
 	"database/sql"
@@ -49,14 +49,17 @@ type Config struct {
 }
 
 // NewServer returns a Server configured with cfg.
-func NewServer(cfg *Config) *Server {
+func NewServer(cfg *Config) (*Server, error) {
 	if cfg == nil {
 		cfg = &Config{
 			Listen: true,
 			Seed:   false,
 		}
 	}
-	db := NewSqliteDB("./")
+	db, err := NewSqliteDB("./")
+	if err != nil {
+		return nil, err
+	}
 	s := &Server{
 		client:       nil,
 		hashes:       make(chan string, 500),
@@ -78,9 +81,11 @@ func NewServer(cfg *Config) *Server {
 	id := cl.PeerID()
 	log.Printf("Torrent Peer ID: %s", metainfo.HashBytes(id[:]).HexString())
 	if err != nil {
-		log.Fatalf("error creating client: %s", err)
+		return nil, err
 	}
 	s.client = cl
+
+	// TODO: reneable peer discovery
 	// if s.seed {
 	// 	s.peerEvents = StartDiscovery(s)
 	// }
@@ -97,7 +102,7 @@ func NewServer(cfg *Config) *Server {
 		}
 		log.Fatal(http.ListenAndServe(":8888", nil))
 	}()
-	return s
+	return s, nil
 }
 
 // Run starts the server and waits for SIGINT or SIGTERM.

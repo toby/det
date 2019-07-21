@@ -5,10 +5,10 @@ import (
 	"regexp"
 
 	"github.com/anacrolix/torrent"
-	"github.com/toby/det"
+	"github.com/toby/det/server"
 )
 
-func printRankedTorrent(t det.Torrent) {
+func printRankedTorrent(t server.Torrent) {
 	name := t.Name
 	if name == "" {
 		name = "-- unresolved --"

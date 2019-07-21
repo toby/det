@@ -1,4 +1,4 @@
-cmd/det/det
+det
 go.sum
 *.test
 sqlite.db

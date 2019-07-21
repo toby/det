@@ -1,4 +1,4 @@
-package det
+package server
 
 const (
 	sqlCreateTorrentTable = `CREATE TABLE IF NOT EXISTS torrent(

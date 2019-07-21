@@ -1,4 +1,4 @@
-package det
+package server
 
 import (
 	"database/sql"
@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -21,13 +20,10 @@ import (
 	"github.com/muesli/cache2go"
 )
 
-const resolveTimeout = time.Second * 30
-const resolveWindow = time.Minute * 10
-const resolverRoutines = 10
-
 // Server is a det peer that contains torrent, dht and det specifc
 // functionality.
 type Server struct {
+	config       *Config
 	client       *torrent.Client
 	hashes       chan string
 	db           *SqliteDBClient
@@ -44,25 +40,34 @@ type Server struct {
 // complete). Seeding will also result in participation in the det peer
 // discovery protocol.
 type Config struct {
-	Listen bool
-	Seed   bool
+	ListenHost      string
+	ListenPort      int
+	PublicHost      string
+	HashQueueLength int
+	SqlitePath      string
+	BoltDBPath      string
+	DownloadPath    string
+	Listen          bool
+	Seed            bool
+	NumResolvers    int
+	ResolverTimeout time.Duration
+	ResolverWindow  time.Duration
+	TorrentDebug    bool
 }
 
 // NewServer returns a Server configured with cfg.
 func NewServer(cfg *Config) (*Server, error) {
 	if cfg == nil {
-		cfg = &Config{
-			Listen: true,
-			Seed:   false,
-		}
+		return nil, fmt.Errorf("Missing server config")
 	}
-	db, err := NewSqliteDB("./")
+	db, err := NewSqliteDB(cfg.SqlitePath)
 	if err != nil {
 		return nil, err
 	}
 	s := &Server{
+		config:       cfg,
 		client:       nil,
-		hashes:       make(chan string, 500),
+		hashes:       make(chan string, cfg.HashQueueLength),
 		resolveCache: cache2go.Cache("resolveCache"),
 		listen:       cfg.Listen,
 		seed:         cfg.Seed,
@@ -72,8 +77,16 @@ func NewServer(cfg *Config) (*Server, error) {
 	}
 
 	torrentCfg := torrent.NewDefaultClientConfig()
+	torrentCfg.ListenHost = func(network string) string { return cfg.ListenHost }
+	torrentCfg.ListenPort = cfg.ListenPort
 	torrentCfg.Seed = cfg.Seed
-	torrentCfg.DefaultStorage = storage.NewBoltDB("./")
+	torrentCfg.Debug = cfg.TorrentDebug
+	torrentCfg.DataDir = cfg.DownloadPath
+	if cfg.PublicHost != "" {
+		torrentCfg.PublicIp4 = net.ParseIP(cfg.PublicHost)
+		torrentCfg.DisableIPv6 = true
+	}
+	torrentCfg.DefaultStorage = storage.NewBoltDB(cfg.BoltDBPath)
 	if s.listen {
 		torrentCfg.DHTOnQuery = s.onQuery
 	}
@@ -90,18 +103,6 @@ func NewServer(cfg *Config) (*Server, error) {
 	// 	s.peerEvents = StartDiscovery(s)
 	// }
 
-	go func() {
-		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			cl.WriteStatus(w)
-		})
-		http.HandleFunc("/torrent", func(w http.ResponseWriter, r *http.Request) {
-			cl.WriteStatus(w)
-		})
-		if s.listen {
-			log.Println("Web stats listening on: http://0.0.0.0:8888")
-		}
-		log.Fatal(http.ListenAndServe(":8888", nil))
-	}()
 	return s, nil
 }
 
@@ -109,7 +110,7 @@ func NewServer(cfg *Config) (*Server, error) {
 func (s *Server) Run() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	for i := 0; i <= resolverRoutines; i++ {
+	for i := 0; i <= s.config.NumResolvers; i++ {
 		go func() {
 			for {
 				h := <-s.hashes
@@ -245,7 +246,7 @@ func (s *Server) onQuery(query *krpc.Msg, source net.Addr) bool {
 		}
 		// have we tried to resolve this in the last 10 mins?
 		if !s.resolveCache.Exists(hx) {
-			s.resolveCache.Add(hx, resolveWindow, true)
+			s.resolveCache.Add(hx, s.config.ResolverWindow, true)
 			s.hashes <- hx
 		}
 	}
@@ -276,7 +277,7 @@ func (s *Server) resolveAndStoreHash(hx string) error {
 					return err
 				}
 				log.Printf("Resolved:\t%s\t%s", t.InfoHash().HexString(), t.Name())
-			case <-time.After(resolveTimeout):
+			case <-time.After(s.config.ResolverTimeout):
 				// log.Printf("Timeout:\t%s", h)
 			}
 		} else {

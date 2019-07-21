@@ -69,7 +69,6 @@ While primitive in its current state, `det` does offer basic Torrent functionali
 
 ```
 ./det download MAGNETURL
-./det seed FILE
 ./det resolve MAGNET URL
 ```
 

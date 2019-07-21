@@ -14,7 +14,7 @@ node on their own machine and interact with the BitTorrent network locally.
 Detergent requires `go` 1.11+ to build.
 
 ```
-git clone https://git.playgrub.com/toby/det.git
+git clone https://github.com/toby/det.git
 cd det
 go build
 ```

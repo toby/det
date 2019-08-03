@@ -110,6 +110,7 @@ func NewServer(cfg *Config) (*Server, error) {
 func (s *Server) Run() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	log.Printf("Number of resolvers: %d", s.config.NumResolvers)
 	for i := 0; i <= s.config.NumResolvers; i++ {
 		go func() {
 			for {

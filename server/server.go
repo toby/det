@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anacrolix/dht/krpc"
+	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
@@ -43,6 +43,7 @@ type Config struct {
 	ListenHost      string
 	ListenPort      int
 	PublicHost      string
+	DisableUpnp     bool
 	HashQueueLength int
 	SqlitePath      string
 	BoltDBPath      string
@@ -79,6 +80,7 @@ func NewServer(cfg *Config) (*Server, error) {
 	torrentCfg := torrent.NewDefaultClientConfig()
 	torrentCfg.ListenHost = func(network string) string { return cfg.ListenHost }
 	torrentCfg.ListenPort = cfg.ListenPort
+	torrentCfg.NoDefaultPortForwarding = cfg.DisableUpnp
 	torrentCfg.Seed = cfg.Seed
 	torrentCfg.Debug = cfg.TorrentDebug
 	torrentCfg.DataDir = cfg.DownloadPath
@@ -92,11 +94,15 @@ func NewServer(cfg *Config) (*Server, error) {
 	}
 	cl, err := torrent.NewClient(torrentCfg)
 	id := cl.PeerID()
-	log.Printf("Torrent Peer ID: %s", metainfo.HashBytes(id[:]).HexString())
 	if err != nil {
 		return nil, err
 	}
 	s.client = cl
+	log.Printf("Torrent Peer ID: %s", metainfo.HashBytes(id[:]).HexString())
+	log.Printf("Listen Address: %s", cfg.ListenHost)
+	log.Printf("Listen Port: %d", cfg.ListenPort)
+	log.Printf("Public IP: %s", cfg.PublicHost)
+	log.Printf("Upnp Enabled: %t", !cfg.DisableUpnp)
 
 	// TODO: reneable peer discovery
 	// if s.seed {
@@ -104,6 +110,11 @@ func NewServer(cfg *Config) (*Server, error) {
 	// }
 
 	return s, nil
+}
+
+// DB returns the servers underlying database.
+func (s *Server) DB() *SqliteDBClient {
+	return s.db
 }
 
 // Run starts the server and waits for SIGINT or SIGTERM.
@@ -269,15 +280,22 @@ func (s *Server) resolveAndStoreHash(hx string) error {
 		if new {
 			select {
 			case <-t.GotInfo():
-				err = s.db.CreateTorrentSearch(t.InfoHash().HexString(), t.Name())
+				log.Printf("Resolved:\t%s\t%s", hx, t.Name())
+				err = s.db.CreateTorrentSearch(hx, t.Name())
 				if err != nil {
 					return err
 				}
-				err = s.db.SetTorrentMeta(t.InfoHash().HexString(), t.Name())
+				info := t.Info()
+				for i, fi := range info.Files {
+					for _, p := range fi.Path {
+						err = s.db.CreateFileInfo(hx, p, fi.Length, i)
+						err = s.db.CreateTorrentSearch(hx, p)
+					}
+				}
+				err = s.db.SetTorrentMeta(hx, t.Name(), t.Length())
 				if err != nil {
 					return err
 				}
-				log.Printf("Resolved:\t%s\t%s", t.InfoHash().HexString(), t.Name())
 			case <-time.After(s.config.ResolverTimeout):
 				// log.Printf("Timeout:\t%s", h)
 			}

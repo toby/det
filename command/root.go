@@ -20,6 +20,7 @@ func init() {
 	viper.SetDefault("ListenHost", "")
 	viper.SetDefault("ListenPort", 42069)
 	viper.SetDefault("PublicHost", "")
+	viper.SetDefault("DisableUpnp", false)
 	viper.SetDefault("HashQueueLength", 500)
 	viper.SetDefault("SqlitePath", "./")
 	viper.SetDefault("BoltDBPath", "./")
@@ -36,6 +37,7 @@ func serverConfigFromDefaults() *server.Config {
 	cfg := &server.Config{}
 	cfg.ListenHost = viper.GetString("ListenHost")
 	cfg.ListenPort = viper.GetInt("ListenPort")
+	cfg.DisableUpnp = viper.GetBool("DisableUpnp")
 	cfg.HashQueueLength = viper.GetInt("HashQueueLength")
 	cfg.SqlitePath = viper.GetString("SqlitePath")
 	cfg.BoltDBPath = viper.GetString("BoltDBPath")

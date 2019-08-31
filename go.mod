@@ -2,7 +2,7 @@ module github.com/toby/det
 
 require (
 	github.com/anacrolix/dht/v2 v2.0.3
-	github.com/anacrolix/torrent v1.6.0
+	github.com/anacrolix/torrent v1.7.0
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/muesli/cache2go v0.0.0-20190609140403-5eb79359852d
